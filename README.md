@@ -1,6 +1,6 @@
-# MS Similarity Tool
+# SpectraMap-CLI
 
-A cross-platform command-line tool for untargeted mass spectrometry data similarity analysis. This tool performs similarity comparisons between all collected spectra in a single MS run and outputs the results as a CSV similarity matrix.
+SpectraMap-CLI is a lightweight cross-platform Rust-based command-line tool for untargeted mass spectrometry data spectral similarity analysis. This tool performs similarity comparisons between all collected spectra in a single MS run and outputs the results as a CSV, TSV, and JSON similarity matrix.
 
 ## Features
 
@@ -24,18 +24,18 @@ A cross-platform command-line tool for untargeted mass spectrometry data similar
 2. Clone and build:
    ```bash
    git clone <repository-url>
-   cd ms-similarity-tool
+   cd spectramap-cli
    cargo build --release
    ```
 
-3. The executable will be available at `target/release/ms-similarity-tool`
+3. The executable is available at `target/release/spectralmap-cli`
 
 ## Usage
 
 ### Basic Usage
 
 ```bash
-ms-similarity-tool -i input.mzML -o similarity_matrix.csv
+spectramap-cli -i input.mzML -o similarity_matrix.csv
 ```
 
 ### Advanced Options
@@ -106,20 +106,3 @@ This CLI tool serves as the foundation for a full interactive visualization tool
 - Real-time spectral comparison
 - Advanced preprocessing options
 - Extracted ion chromatogram support
-
-## Dependencies
-
-- `mzdata`: Mass spectrometry data parsing
-- `ndarray`: N-dimensional array operations
-- `rayon`: Data parallelism
-- `clap`: Command line argument parsing
-- `csv`: CSV file handling
-- `indicatif`: Progress bars
-
-## License
-
-[Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here]
