@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+base64 = "0.22.1"
+byteorder = "1.5.0"
+flate2 = "1.1.2"
+mzdata = "0.54.0"
 quick-xml = "0.29"
+roxmltree = "0.20.0"
 
 [profile.release]
 opt-level = 3
