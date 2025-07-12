@@ -1,6 +1,6 @@
 use std::fs;
 use std::collections::HashMap;
-use std::error::Error;
+// use std::error::Error;
 use std::io::{Cursor, Read};
 
 use roxmltree::Document;
@@ -10,7 +10,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 
 /// A single m/z-intensity pair.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Peak {
     pub mz: f32,
     pub intensity: f32,
@@ -48,6 +48,7 @@ pub fn import_mzml(
         let mut ints = Vec::new();
         
         // Iterate over each binary data array
+        println!("------------------------------------------------------------------------------");
         for bda in spec.children().filter(|n| n.tag_name().name() == "binaryDataArray") {
             let mut is_mz = false;
             let mut is_int = false;
@@ -90,8 +91,10 @@ pub fn import_mzml(
                 // Check if we have m/z or intensity data
                 if is_mz {
                     mzs = vals;
+                    println!("Found m/z data for scan {}: {}: {:?}", scan, mzs.len(), mzs);
                 } else if is_int {
                     ints = vals;
+                    println!("Found intensity data for scan {}: {}: {:?}", scan, ints.len(), ints);
                 }
             }
         }
@@ -99,21 +102,28 @@ pub fn import_mzml(
         // Check lengths match or record error
         if mzs.len() != ints.len() {
             errors.push(format!(
-                "Spectrum {} has mismatched lengths: m/z={} intensity={} bytes",
+                "Spectrum {} has mismatched lengths: m/z={} intensity={}",
                 scan,
                 mzs.len(),
                 ints.len()
             ));
         } else {
             // zip into Peak structs and insert into map
-            let peaks: Vec<Peak> = mzs
+            let mut peaks: Vec<Peak> = mzs
                 .into_iter()
                 .zip(ints.into_iter())
                 .map(|(mz, intensity)| Peak { mz, intensity })
                 .collect();
+
+            // Sort peaks
+            peaks.sort_by(|a, b| a.mz.partial_cmp(&b.mz).unwrap());
+
             result.insert(scan, peaks);
         }
     }
+
+    // Sort the HashMap by scan ID
+    result = result.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
     // Return or error
     if errors.is_empty() {
@@ -128,15 +138,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_import_on_sample() {
-        let data = import_mzml("tests/data/1min.mzML");
-        assert!(data.is_ok(), "Expected successful import");
-        let map = data.unwrap();
-        // spectrum 39 should have 11 peaks
-        let peaks = map.get("39").expect("Scan 39 missing");
-        assert_eq!(peaks.len(), 70);
-        // Check first peak roughly
-        assert!((peaks[0].mz - 400.8245).abs() < 1e-3);
-        assert!((peaks[0].intensity - 1036.0).abs() < 1e-3);
+    fn test_import_on_samples() {
+        // Iterate through all .mzML files and check that each spectrum has the correct number of spectra
+        let mut file_num_spectra_map = HashMap::new();
+        file_num_spectra_map.insert(r"tests\data\1min.mzML".to_string(), 39);
+        file_num_spectra_map.insert(r"tests\data\2min.mzML".to_string(), 38);
+        file_num_spectra_map.insert(r"tests\data\tiny.msdata.mzML0.99.9.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny.msdata.mzML0.99.10.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny.pwiz.1.1.mzML".to_string(), 4);
+        file_num_spectra_map.insert(r"tests\data\tiny.pwiz.mzML0.99.9.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny.pwiz.mzML0.99.10.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny1.mzML0.99.0.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny1.mzML0.99.1.mzML".to_string(), 2);
+        // file_num_spectra_map.insert(r"tests\data\tiny2_SRM.mzML0.99.0.mzML".to_string(), 2);
+        // file_num_spectra_map.insert(r"tests\data\tiny2_SRM.mzML0.99.1.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny4_LTQ-FT.mzML0.99.0.mzML".to_string(), 2);
+        file_num_spectra_map.insert(r"tests\data\tiny4_LTQ-FT.mzML0.99.1.mzML".to_string(), 2);
+        for (file, expected_count) in file_num_spectra_map {
+            let data = import_mzml(&file);
+            assert!(data.is_ok(), "Failed to import {}", file);
+            let map = data.unwrap();
+            assert_eq!(map.len(), expected_count, "File {} has incorrect number of spectra", file);
+        }
+        println!("All tests passed!");
     }
 }

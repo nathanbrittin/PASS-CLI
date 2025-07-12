@@ -1,8 +1,10 @@
 use std::process;
-use std::path::Path;
+// use std::path::Path;
 use std::io::{self, Write}; // Import io and Write traits for flushing output
 mod ms_io;
-use ms_io::import_mzml;
+pub use ms_io::import_mzml;
+mod similarity;
+pub use similarity::{spectrum_to_dense_vec, cosine_similarity, compute_pairwise_similarity};
 
 fn main() {
 
@@ -56,29 +58,31 @@ fn main() {
         .expect("Failed to read line");
 
     // Importing the data file
-    let test_file: &str = &input_path;
-    // let test_file: &str = "tests/data/1min.mzML"; // Placeholder for testing
-    // let test_file: &str = "tiny.mzML";
-    // // Verify the file exists
-    // if !verify_file_exists(test_file) {
-    //     println!("Error: The file '{}' does not exist.", test_file);
-    //     process::exit(1);
-    // } else {
-    //     println!("The file '{}' exists.", test_file);
+    let spec_map = import_mzml(&input_path).expect("Failed to import mzml file. Check formatting.");
+    println!("Parsed {} spectra successfully.", spec_map.len());
+
+    // Determine a max_mz for binning (e.g., highest m/z across all spectra)
+    let max_mz = spec_map
+        .values()
+        .flat_map(|peaks| peaks.iter().map(|p| p.mz))
+        .fold(0./0., f32::max);
+
+    // Compute pairwise cosine similarities
+    let sims = compute_pairwise_similarity(&spec_map, mass_tolerance, max_mz);
+
+    // Print a summary (here: self‐similarities and one example pair)
+    println!("Computed similarities for {} spectra:", spec_map.len());
+    for ((a, b), sim) in sims.iter().filter(|((a, b), _)| a == b) {
+        println!("  • {} ↔ {} = {:.3}", a, b, sim);
+    }
+
+    // Example: print similarity of scan 1 vs scan 2 if present
+    // if let (Some(_), Some(_)) = (spec_map.get("1"), spec_map.get("2")) {
+    //     if let Some(sim) = sims.get(&("1".to_string(), "2".to_string())) {
+    //         println!("Similarity scan 1 vs 2 = {:.3}", sim);
+    //     }
     // }
 
-    match import_mzml(test_file) {
-        Ok(map) => {
-            println!("Parsed {} spectra successfully.", map.len());
-        }
-        Err(errs) => {
-            eprintln!("Failed to import {} with {} errors:", test_file, errs.len());
-            for e in errs {
-                eprintln!("  - {}", e);
-            }
-            process::exit(1);
-        }
-    }
 
     println!("Success so far!");
     process::exit(0);
@@ -113,9 +117,9 @@ fn detect_similarity_metric(similarity_metric: &str) -> Option<&str> {
     }
 }
 
-fn verify_file_exists(file_path: &str) -> bool {
-    Path::new(file_path).exists()
-}
+// fn verify_file_exists(file_path: &str) -> bool {
+//     Path::new(file_path).exists()
+// }
 
 fn prompt_input_path() -> String {
     loop {
@@ -220,7 +224,7 @@ fn prompt_min_intensity() -> f64 {
     loop {
         println!("----------------------------------------------------------------------------------------------");
         // Prompt for minimum intensity threshold
-        print!("||    Please enter the desired minimum intensity threshold (default: 1000.0): ");
+        print!("||    Please enter the desired minimum intensity threshold (default: 1.0): ");
         let mut min_int_input = String::new();
         io::stdout().flush().unwrap();
 
@@ -233,7 +237,7 @@ fn prompt_min_intensity() -> f64 {
         // Trim & apply default
         let trimmed_min_int = min_int_input.trim();
         let input_min_int_str = if trimmed_min_int.is_empty() {
-            "1000.0"
+            "1.0"
         } else {
             trimmed_min_int
         };
@@ -258,7 +262,7 @@ fn prompt_min_intensity() -> f64 {
     }
 }
 
-fn prompt_mass_tolerance() -> f64 {
+fn prompt_mass_tolerance() -> f32 {
     loop {
         println!("----------------------------------------------------------------------------------------------");
         // Prompt for mass tolerance
@@ -281,7 +285,7 @@ fn prompt_mass_tolerance() -> f64 {
         };
 
         // Parse
-        match input_mass_tol_str.parse::<f64>() {
+        match input_mass_tol_str.parse::<f32>() {
             Ok(mass_tolerance) if mass_tolerance > 0.0 => {
                 // Erase the prompt+input line
                 print!("\r\x1B[K");
