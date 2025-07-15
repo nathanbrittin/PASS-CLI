@@ -1,10 +1,11 @@
 use std::process;
+use std::fmt; // Import fmt for Display implementation
 // use std::path::Path;
 use std::io::{self, Write}; // Import io and Write traits for flushing output
 mod ms_io;
-pub use ms_io::import_mzml;
+pub use ms_io::{import_mzml, OutputFormat};
 mod similarity;
-pub use similarity::{spectrum_to_dense_vec, cosine_similarity, compute_pairwise_similarity};
+pub use similarity::{spectrum_to_dense_vec, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
 
 fn main() {
 
@@ -18,7 +19,7 @@ fn main() {
 ||  -Parsing `.mzML` files for spectral data                                                
 ||  -Computing pairwise similarity with cosine and modified cosine metrics                  
 ||  -Building exportable similarity matrices for downstream visualization and analysis      
-||  -Supports file formats: `.mzML` and `.mzXML`                                            
+||  -Supports file formats: `.mzML` (default) and `.mzXML` (future)                                          
 ----------------------------------------------------------------------------------------------
 ||  Please follow the directions to process your data.                                      
 ||  Alternatively, provide a config.yaml file to automate processing.                       
@@ -27,7 +28,7 @@ fn main() {
 
     let input_path = prompt_input_path();
 
-    let output_path = prompt_output_path();
+    let (output_path, output_format) = prompt_output_path();
 
     let similarity_metric = prompt_similarity_metric();
 
@@ -62,26 +63,16 @@ fn main() {
     println!("Parsed {} spectra successfully.", spec_map.len());
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
-    let max_mz = spec_map
-        .values()
-        .flat_map(|peaks| peaks.iter().map(|p| p.mz))
-        .fold(0./0., f32::max);
+    let max_mz = spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
+    println!("Max m/z: {}", max_mz);
+
+    // Compute dense binary vectors
+    let bits_map = compute_dense_vec_map(&spec_map, mass_tolerance, max_mz);
+    println!("Computed dense binary vectors successfully.");
 
     // Compute pairwise cosine similarities
-    let sims = compute_pairwise_similarity(&spec_map, mass_tolerance, max_mz);
-
-    // Print a summary (here: self‐similarities and one example pair)
-    println!("Computed similarities for {} spectra:", spec_map.len());
-    for ((a, b), sim) in sims.iter().filter(|((a, b), _)| a == b) {
-        println!("  • {} ↔ {} = {:.3}", a, b, sim);
-    }
-
-    // Example: print similarity of scan 1 vs scan 2 if present
-    // if let (Some(_), Some(_)) = (spec_map.get("1"), spec_map.get("2")) {
-    //     if let Some(sim) = sims.get(&("1".to_string(), "2".to_string())) {
-    //         println!("Similarity scan 1 vs 2 = {:.3}", sim);
-    //     }
-    // }
+    let sims = compute_pairwise_similarity_matrix_ndarray(&bits_map);
+    println!("Computed pairwise similarity matrix successfully.");
 
 
     println!("Success so far!");
@@ -97,13 +88,25 @@ fn detect_input_file_type(file_path: &str) -> Option<&str> {
     }
 }
 
-fn detect_output_file_type(file_path: &str) -> Option<&str> {
+fn detect_output_file_type(file_path: &str) -> Option<OutputFormat> {
     match file_path.split('.').last() {
-        Some("") => Some("csv"),
-        Some("csv") => Some("csv"),
-        Some("tsv") => Some("tsv"),
-        Some("json") => Some("json"),
+        Some("") => Some(OutputFormat::Csv),
+        Some("csv") => Some(OutputFormat::Csv),
+        Some("tsv") => Some(OutputFormat::Tsv),
+        Some("json") => Some(OutputFormat::Json),
         _ => None,
+    }
+}
+
+/// Implement Display so the format can be printed easily.
+impl fmt::Display for OutputFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            OutputFormat::Csv => "csv",
+            OutputFormat::Tsv => "tsv",
+            OutputFormat::Json => "json",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -116,10 +119,6 @@ fn detect_similarity_metric(similarity_metric: &str) -> Option<&str> {
         _ => None,
     }
 }
-
-// fn verify_file_exists(file_path: &str) -> bool {
-//     Path::new(file_path).exists()
-// }
 
 fn prompt_input_path() -> String {
     loop {
@@ -151,7 +150,7 @@ fn prompt_input_path() -> String {
     };
 }
 
-fn prompt_output_path() -> String {
+fn prompt_output_path() -> (String, String) {
     loop {
         println!("----------------------------------------------------------------------------------------------");
         println!("||    Please enter the desired path to your output file.");
@@ -178,7 +177,7 @@ fn prompt_output_path() -> String {
             print!("\r\x1B[K");
             println!("||    File selected: {}", trimmed);
             println!("||    File type detected: {}", ft);
-            return trimmed.to_string();
+            return (trimmed.to_string(), ft);
         } else {
             // Clear and show error, then loop again
             print!("\r\x1B[K");
