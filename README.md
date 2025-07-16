@@ -46,9 +46,7 @@ ms-similarity-tool \
   --output results.csv \
   --method modified-cosine \
   --min-intensity 1000.0 \
-  --mass-tolerance 0.02 \
-  --max-spectra 1000 \
-  --verbose
+  --mass-tolerance 0.01 \
 ```
 
 ### Command Line Options

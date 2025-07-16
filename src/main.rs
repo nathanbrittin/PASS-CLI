@@ -158,6 +158,10 @@ fn prompt_input_path() -> String {
         // Trim whitespace/newlines
         let trimmed = buffer.trim();
 
+        // Trim quotation marks
+        let trimmed = trimmed.trim_matches('"');
+        let trimmed = trimmed.trim_matches('\'');
+
         // Try to detect file type
         if let Some(ft) = detect_input_file_type(trimmed) {
             // Clear the current prompt line and confirm selection

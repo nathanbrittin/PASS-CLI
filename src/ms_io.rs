@@ -213,6 +213,8 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 record.push(scan_id.clone());
                 // row as f32 strings
                 for val in mat.index_axis(Axis(1), i) {
+                    // Make the value only 4 digits after decimal point
+                    let val = format!("{:.4}", val);
                     record.push(val.to_string());
                 }
                 wtr.write_record(&record)?;
