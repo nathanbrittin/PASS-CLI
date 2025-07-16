@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 // use std::error::Error;
 use ndarray::{Array2};
-use crate::ms_io::{import_mzml, Peak};
+use crate::ms_io::Peak;
+use rayon::prelude::*;
+use std::time::Instant;
 
 /// Converts a spectrum from a sparse representation of peaks to a dense representation as a vector.
 ///
@@ -24,12 +26,16 @@ use crate::ms_io::{import_mzml, Peak};
 /// ### Returns
 ///
 /// * A `Vec<f32>` representing the dense spectrum.
-pub fn spectrum_to_dense_vec(peaks: &[Peak], bin_width: f32, max_mz: f64) -> Vec<f32> {
+pub fn spectrum_to_dense_vec(peaks: &[Peak], bin_width: f32, max_mz: f64, minimum_intensity: f64) -> Vec<f32> {
     // Compute number of bins as ceil(max_mz / bin_width)
     let nbins = (max_mz / bin_width as f64).ceil() as usize;
     // Create a Vec<f32> initialized to 0.0
     let mut bins = vec![0.0_f32; nbins];
     for p in peaks {
+        // Only consider peaks with intensity >= minimum_intensity
+        if p.intensity <= minimum_intensity as f64 {
+            continue;
+        }
         // Only consider peaks in [0.0, max_mz]
         if (0.0_f64..=max_mz as f64).contains(&p.mz) {
             // Determine which bin this m/z belongs in
@@ -39,7 +45,6 @@ pub fn spectrum_to_dense_vec(peaks: &[Peak], bin_width: f32, max_mz: f64) -> Vec
             }
         }
     }
-
     bins
 }
 
@@ -82,6 +87,43 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     }
 }
 
+/// Computes the dot product of two vectors.
+///
+/// The dot product is the sum of the products of the corresponding entries of the two sequences of numbers.
+///
+/// ### Arguments
+///
+/// * `v1` - A slice of f32 values representing the first vector.
+/// * `v2` - A slice of f32 values representing the second vector.
+///
+/// ### Returns
+///
+/// * A f32 value representing the dot product of the two vectors.
+///
+/// ### Notes
+///
+/// * The vectors must be of the same length.
+pub fn dot(v1: &[f32], v2: &[f32]) -> f32 {
+    // assuming v1.len() == v2.len()
+    v1.iter().zip(v2).map(|(a, b)| a * b).sum()
+}
+
+/// Normalizes a vector in-place.
+///
+/// The vector is divided by its magnitude, leaving it unchanged if the magnitude is zero.
+///
+/// ### Arguments
+///
+/// * `v` - The vector to normalize.
+fn normalize(v: &mut [f32]) {
+    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for x in v {
+            *x /= norm;
+        }
+    }
+}
+
 /// Computes a pairwise similarity matrix for spectra based on their binary bit vectors.
 ///
 /// This function takes a map from scan IDs to their binary bit vector 
@@ -104,26 +146,48 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
 pub fn compute_pairwise_similarity_matrix_ndarray(
     bits_map: &HashMap<String, Vec<f32>>,
 ) -> (Vec<String>, Array2<f32>) {
-    // Fix an ordering of scan IDs
+    let start = Instant::now();
+    // 1) Order and sort scan IDs numerically
     let mut scans: Vec<String> = bits_map.keys().cloned().collect();
-
-    // Sort scans by ID and convert to floats for sorting 
     scans.sort_by(|a, b| a.parse::<f64>().unwrap().partial_cmp(&b.parse::<f64>().unwrap()).unwrap());
+    let elapsed = start.elapsed();
+    println!("Sorted scan IDs in {:.2?}", elapsed);
+    let start = Instant::now();
+    // 2) Cache references to the spectra slices inside an Arc for thread-safe sharing
+    use std::sync::Arc;
+    let spectra: Arc<Vec<&[f32]>> = Arc::new(scans.iter().map(|id| bits_map[id].as_slice()).collect());
 
     let n = scans.len();
-
-    // Create an nxn zeroed array
     let mut mat = Array2::<f32>::zeros((n, n));
-
-    // Fill in diagonal and off-diagonals
+    let elapsed = start.elapsed();
+    println!("Cached scan IDs in {:.2?}", elapsed);
+    let start = Instant::now();
+    // 3) Parallel compute upper-triangle similarities
+    let entries: Vec<(usize, usize, f32)> = (0..n)
+        .into_par_iter()
+        .flat_map(|i| {
+            // Clone Arc for this thread
+            let spectra = Arc::clone(&spectra);
+            (i + 1..n).into_par_iter().map(move |j| {
+                // spectra now is safely shared
+                let sim = dot(spectra[i], spectra[j]);
+                (i, j, sim)
+            })
+        })
+        .collect();
+    let elapsed = start.elapsed();
+    println!("Computed cosine similarities in {:.2?}", elapsed);
+    let start = Instant::now();
+    // 4) Fill matrix: diagonal and symmetrize
     for i in 0..n {
         mat[(i, i)] = 1.0;
-        for j in (i + 1)..n {
-            let sim = cosine_similarity(&bits_map[&scans[i]], &bits_map[&scans[j]]);
-            mat[(i, j)] = sim;
-            mat[(j, i)] = sim;
-        }
     }
+    for (i, j, sim) in entries {
+        mat[(i, j)] = sim;
+        mat[(j, i)] = sim;
+    }
+    let elapsed = start.elapsed();
+    println!("Filled matrix in {:.2?}", elapsed);
 
     (scans, mat)
 }
@@ -132,9 +196,10 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
 /// at the given bin width and maximum m/z.
 ///
 /// The binary bit vector representation is a fixed-size vector of length
-/// `ceil(max_mz / bin_width)` where each element is 1.0 if a peak falls in the
+/// `ceil(max_mz / bin_width)` where each element is the intensity of the peak that falls in the
 /// corresponding m/z range, and 0.0 otherwise. The `spectrum_to_dense_vec`
-/// function is used to compute each binary bit vector.
+/// function is used to compute each binary bit vector. The vector is then normalized and added
+/// to the map.
 ///
 /// This function is used to preprocess the data before computing the similarity
 /// matrix. The result can be passed to `compute_pairwise_similarity_matrix_ndarray`.
@@ -150,18 +215,132 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
 ///
 /// A `HashMap<String, Vec<f32>>` where keys are scan IDs and values are their 
 /// corresponding binary bit vector representations.
-pub fn compute_dense_vec_map(spec_map: &HashMap<String, Vec<Peak>>, bin_width: f32, max_mz: f64) -> HashMap<String, Vec<f32>> {
-    let mut bits_map: HashMap<String, Vec<f32>> = HashMap::new();
+pub fn compute_dense_vec_map(
+    spec_map: &HashMap<String, Vec<Peak>>,
+    bin_width: f32,
+    max_mz: f64,
+    minimum_intensity: f64
+) -> HashMap<String, Vec<f32>> {
+    let mut bits_map = HashMap::with_capacity(spec_map.len());
     for (scan, peaks) in spec_map {
-        let bv = spectrum_to_dense_vec(&peaks, bin_width, max_mz);
+        let mut bv = spectrum_to_dense_vec(peaks, bin_width, max_mz, minimum_intensity);
+        normalize(&mut bv);
         bits_map.insert(scan.clone(), bv);
     }
     bits_map
 }
 
+/// Remove any vector positions (bins) that are zero across all spectra.
+///
+/// # Arguments
+///
+/// * `bits_map` - map from scan ID to its dense vector
+///
+/// # Returns
+///
+/// A new `HashMap` where each vector has been pruned to only the indices
+/// where at least one spectrum had a non-zero intensity.
+pub fn prune_unused_bins(
+    bits_map: &HashMap<String, Vec<f32>>,
+) -> HashMap<String, Vec<f32>> {
+    if bits_map.is_empty() {
+        return HashMap::new();
+    }
+    let n = bits_map.values().next().unwrap().len();
+    // Determine which indices are used by any vector
+    let mut used = vec![false; n];
+    for vec in bits_map.values() {
+        for (i, &val) in vec.iter().enumerate() {
+            if val != 0.0 {
+                used[i] = true;
+            }
+        }
+    }
+    // Collect active positions
+    let active_indices: Vec<usize> = used.iter()
+        .enumerate()
+        .filter_map(|(i, &u)| if u { Some(i) } else { None })
+        .collect();
+
+    // Build pruned map
+    let mut pruned = HashMap::with_capacity(bits_map.len());
+    for (scan, vec) in bits_map {
+        let pruned_vec: Vec<f32> = active_indices
+            .iter()
+            .map(|&i| vec[i])
+            .collect();
+        pruned.insert(scan.clone(), pruned_vec);
+    }
+    pruned
+}
+
+/// Set columns to zero if they have a hit in at least `min_frac * n_spec` spectra.
+///
+/// This is useful for removing background noise from the similarity matrix.
+///
+/// # Arguments
+///
+/// * `bits_map` - Mutable map from scan ID to its dense vector
+/// * `min_frac` - Minimum fraction of spectra that must contain a hit in the column
+///                for it to be considered a background column. e.g. 0.5 for 50%
+pub fn prune_background_columns(
+    bits_map: &mut HashMap<String, Vec<f32>>,
+    min_frac: f64 // e.g. 0.5 for 50%
+) {
+    let n_spec = bits_map.len();
+    if n_spec == 0 { return; }
+
+    // assume all vectors have the same length
+    let len = bits_map.values().next().unwrap().len();
+    let threshold = (n_spec as f64 * min_frac).ceil() as usize;
+
+    // 1) Count spectra with a “hit” in each column
+    let mut counts = vec![0usize; len];
+    for vec in bits_map.values() {
+        for (j, &v) in vec.iter().enumerate() {
+            if v != 0.0 {
+                counts[j] += 1;
+            }
+        }
+    }
+
+    // 2) Mark background columns
+    let bg_cols: Vec<usize> = counts.iter()
+        .enumerate()
+        .filter_map(|(j, &c)| if c >= threshold { Some(j) } else { None })
+        .collect();
+
+    // 3a) Option A: zero out background columns
+    for vec in bits_map.values_mut() {
+        for &j in &bg_cols {
+            vec[j] = 0.0;
+        }
+    }
+
+    // 3b) Option B: *drop* background columns entirely
+    // (uncomment if you want to shrink vectors)
+    /*
+    for vec in bits_map.values_mut() {
+        // build a new Vec without bg columns
+        let mut pruned = Vec::with_capacity(len - bg_cols.len());
+        let mut bg_iter = bg_cols.iter().peekable();
+        for (j, &v) in vec.iter().enumerate() {
+            if Some(&j) == bg_iter.peek() {
+                bg_iter.next();
+                continue;
+            }
+            pruned.push(v);
+        }
+        *vec = pruned;
+    }
+    */
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ms_io::import_mzml;
 
     /// Tests the generation of a map of binary bit vectors from a map of spectra,
     /// and then computes the cosine similarity matrix from the binary bit vectors.
@@ -184,7 +363,7 @@ mod tests {
         let bin_width = 0.01;
         println!("Bin width: {}", bin_width);
         // Generate map of bin Vectors
-        let bits_map = compute_dense_vec_map(&map, bin_width, max_mz);
+        let bits_map = compute_dense_vec_map(&map, bin_width, max_mz, 0.0);
         // Compute cosine similarity matrix
         let sims = compute_pairwise_similarity_matrix_ndarray(&bits_map);
         // Print confirmation if sims is not empty

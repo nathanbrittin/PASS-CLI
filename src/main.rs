@@ -2,10 +2,11 @@ use std::process;
 use std::fmt; // Import fmt for Display implementation
 // use std::path::Path;
 use std::io::{self, Write}; // Import io and Write traits for flushing output
+use std::time::Instant;
 mod ms_io;
-pub use ms_io::{import_mzml, OutputFormat};
+pub use ms_io::{import_mzml, OutputFormat, write_similarity_matrix};
 mod similarity;
-pub use similarity::{spectrum_to_dense_vec, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
+pub use similarity::{prune_background_columns, prune_unused_bins, spectrum_to_dense_vec, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
 
 fn main() {
 
@@ -34,11 +35,11 @@ fn main() {
 
     let minimum_intensity = prompt_min_intensity();
 
-    let max_peaks = prompt_max_peaks();
+    // let max_peaks = prompt_max_peaks();
 
     let mass_tolerance = prompt_mass_tolerance();
 
-    let verbose = prompt_verbose();
+    // let verbose = prompt_verbose();
 
     // Print a final confirmation
     println!("----------------------------------------------------------------------------------------------");
@@ -47,8 +48,8 @@ fn main() {
     println!("||    Similarity metric: {}", similarity_metric);
     println!("||    Minimum intensity threshold: {:.2}", minimum_intensity);
     println!("||    Mass tolerance: {:.2}", mass_tolerance);
-    println!("||    Maximum number of peaks: {}", max_peaks);
-    println!("||    Verbose flag: {}", verbose);
+    // println!("||    Maximum number of peaks: {}", max_peaks);
+    // println!("||    Verbose flag: {}", verbose);
 
     // Wait for the user to press enter
     println!("----------------------------------------------------------------------------------------------");
@@ -58,24 +59,46 @@ fn main() {
         .read_line(&mut input)
         .expect("Failed to read line");
 
+    let start = Instant::now();
     // Importing the data file
     let spec_map = import_mzml(&input_path).expect("Failed to import mzml file. Check formatting.");
     println!("Parsed {} spectra successfully.", spec_map.len());
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
     let max_mz = spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
-    println!("Max m/z: {}", max_mz);
+    // Get vector length for binning
+    let vector_length = (max_mz / mass_tolerance as f64).ceil() as usize;
+    println!("Min m/z: 0.0, Max m/z: {}, Bin width: {:.2}, Vector Size: {}", max_mz, mass_tolerance, vector_length);
 
     // Compute dense binary vectors
-    let bits_map = compute_dense_vec_map(&spec_map, mass_tolerance, max_mz);
+    let mut bits_map = compute_dense_vec_map(&spec_map, mass_tolerance, max_mz, minimum_intensity);
     println!("Computed dense binary vectors successfully.");
 
+    // Filter background signals
+    prune_background_columns(&mut bits_map, 0.5);
+    println!("Pruned background columns successfully.");
+
+    // Print vector size
+    println!("Vector size: {}", bits_map.values().next().unwrap().len());
+
+    // Prune bits_map
+    let bits_map = prune_unused_bins(&bits_map);
+    println!("Pruned dense binary vectors successfully.");
+
+    // Print pruned vector size
+    println!("Pruned vector size: {}", bits_map.values().next().unwrap().len());  
+
     // Compute pairwise cosine similarities
-    let sims = compute_pairwise_similarity_matrix_ndarray(&bits_map);
+    let (scans, mat) = compute_pairwise_similarity_matrix_ndarray(&bits_map);
     println!("Computed pairwise similarity matrix successfully.");
 
+    // Export the pairwise similarity matrix
+    let _ = write_similarity_matrix(&scans, &mat, &output_path, output_format);
+    println!("Exported similarity matrix successfully.");
 
-    println!("Success so far!");
+    println!("Success! File written to: {}", output_path);
+    let duration = start.elapsed();
+    println!("Time elapsed: {:.2?}", duration);
     process::exit(0);
 
 }
@@ -150,7 +173,7 @@ fn prompt_input_path() -> String {
     };
 }
 
-fn prompt_output_path() -> (String, String) {
+fn prompt_output_path() -> (String, OutputFormat) {
     loop {
         println!("----------------------------------------------------------------------------------------------");
         println!("||    Please enter the desired path to your output file.");
@@ -303,86 +326,86 @@ fn prompt_mass_tolerance() -> f32 {
     }
 }
 
-fn prompt_max_peaks() -> u32 {
-    loop {
-        println!("----------------------------------------------------------------------------------------------");
-        // Prompt for maximum number of peaks
-        print!("||    Please enter the desired maximum number of peaks (default: 1000): ");
-        let mut max_peaks_input = String::new();
-        io::stdout().flush().unwrap();
+// fn prompt_max_peaks() -> u32 {
+//     loop {
+//         println!("----------------------------------------------------------------------------------------------");
+//         // Prompt for maximum number of peaks
+//         print!("||    Please enter the desired maximum number of peaks (default: 1000): ");
+//         let mut max_peaks_input = String::new();
+//         io::stdout().flush().unwrap();
 
-        // Read into our buffer
-        max_peaks_input.clear();
-        io::stdin()
-            .read_line(&mut max_peaks_input)
-            .expect("Failed to read maximum number of peaks.");
+//         // Read into our buffer
+//         max_peaks_input.clear();
+//         io::stdin()
+//             .read_line(&mut max_peaks_input)
+//             .expect("Failed to read maximum number of peaks.");
 
-        // Trim & apply default
-        let trimmed_max_peaks = max_peaks_input.trim();
-        let input_max_peaks_str = if trimmed_max_peaks.is_empty() {
-            "1000"
-        } else {
-            trimmed_max_peaks
-        };
+//         // Trim & apply default
+//         let trimmed_max_peaks = max_peaks_input.trim();
+//         let input_max_peaks_str = if trimmed_max_peaks.is_empty() {
+//             "1000"
+//         } else {
+//             trimmed_max_peaks
+//         };
 
-        // Parse
-        match input_max_peaks_str.parse::<u32>() {
-            Ok(max_peaks) if max_peaks > 0 => {
-                // Erase the prompt+input line
-                print!("\r\x1B[K");
-                // Print the selected value
-                println!("||    Maximum number of peaks selected: {}", max_peaks);
-                return max_peaks;
-            }
-            _ => {
-                // Erase the prompt+input line
-                print!("\r\x1B[K");
-                // Print error
-                println!("||    !!! Invalid number. Please enter a positive integer. !!!");
-                // loop back
-            }
-        }
-    }
-}
+//         // Parse
+//         match input_max_peaks_str.parse::<u32>() {
+//             Ok(max_peaks) if max_peaks > 0 => {
+//                 // Erase the prompt+input line
+//                 print!("\r\x1B[K");
+//                 // Print the selected value
+//                 println!("||    Maximum number of peaks selected: {}", max_peaks);
+//                 return max_peaks;
+//             }
+//             _ => {
+//                 // Erase the prompt+input line
+//                 print!("\r\x1B[K");
+//                 // Print error
+//                 println!("||    !!! Invalid number. Please enter a positive integer. !!!");
+//                 // loop back
+//             }
+//         }
+//     }
+// }
 
-fn prompt_verbose() -> bool {
-    loop {
-        println!("----------------------------------------------------------------------------------------------");
-        // Prompt for verbose flag
-        print!("||    Please enter the desired verbose flag (default: true): ");
-        let mut verbose_input = String::new();
-        io::stdout().flush().unwrap();
+// fn prompt_verbose() -> bool {
+//     loop {
+//         println!("----------------------------------------------------------------------------------------------");
+//         // Prompt for verbose flag
+//         print!("||    Please enter the desired verbose flag (default: true): ");
+//         let mut verbose_input = String::new();
+//         io::stdout().flush().unwrap();
 
-        // Read into our buffer
-        verbose_input.clear();
-        io::stdin()
-            .read_line(&mut verbose_input)
-            .expect("Failed to read verbose flag.");
+//         // Read into our buffer
+//         verbose_input.clear();
+//         io::stdin()
+//             .read_line(&mut verbose_input)
+//             .expect("Failed to read verbose flag.");
 
-        // Trim & apply default
-        let trimmed_verbose = verbose_input.trim();
-        let input_verbose_str = if trimmed_verbose.is_empty() {
-            "true"
-        } else {
-            trimmed_verbose
-        };
+//         // Trim & apply default
+//         let trimmed_verbose = verbose_input.trim();
+//         let input_verbose_str = if trimmed_verbose.is_empty() {
+//             "true"
+//         } else {
+//             trimmed_verbose
+//         };
 
-        // Parse
-        match input_verbose_str.parse::<bool>() {
-            Ok(verbose) => {
-                // Erase the prompt+input line
-                print!("\r\x1B[K");
-                // Print the selected value
-                println!("||    Verbose flag selected: {}", verbose);
-                return verbose;
-            }
-            _ => {
-                // Erase the prompt+input line
-                print!("\r\x1B[K");
-                // Print error
-                println!("||    !!! Invalid flag. Please enter true or false. !!!");
-                // loop back
-            }
-        }
-    }
-}
+//         // Parse
+//         match input_verbose_str.parse::<bool>() {
+//             Ok(verbose) => {
+//                 // Erase the prompt+input line
+//                 print!("\r\x1B[K");
+//                 // Print the selected value
+//                 println!("||    Verbose flag selected: {}", verbose);
+//                 return verbose;
+//             }
+//             _ => {
+//                 // Erase the prompt+input line
+//                 print!("\r\x1B[K");
+//                 // Print error
+//                 println!("||    !!! Invalid flag. Please enter true or false. !!!");
+//                 // loop back
+//             }
+//         }
+//     }
+// }
