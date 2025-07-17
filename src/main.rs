@@ -71,36 +71,39 @@ fn main() {
     println!("Filtered MS1 and MS2 spectra successfully.");
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
-    let max_mz = spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
+    let max_ms1_mz = ms1_spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
     // Get vector length for binning
-    let vector_length = (max_mz / mass_tolerance as f64).ceil() as usize;
-    println!("Min m/z: 0.0, Max m/z: {}, Bin width: {:.2}, Vector Size: {}", max_mz, mass_tolerance, vector_length);
+    let vector_length = (max_ms1_mz / mass_tolerance as f64).ceil() as usize;
+    println!("Min m/z: 0.0, Max m/z: {}, Bin width: {:.2}, Vector Size: {}", max_ms1_mz, mass_tolerance, vector_length);
 
     // Compute dense binary vectors
-    let mut bits_map = compute_dense_vec_map(&spec_map, mass_tolerance, max_mz, minimum_intensity);
+    let mut ms1_bits_map = compute_dense_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, minimum_intensity);
+    let mut ms2_bits_map = compute_dense_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, minimum_intensity);
     println!("Computed dense binary vectors successfully.");
 
     // Filter background signals
-    prune_background_columns(&mut bits_map, 0.5);
+    prune_background_columns(&mut ms1_bits_map, 0.5);
+    prune_background_columns(&mut ms2_bits_map, 0.5);
     println!("Pruned background columns successfully.");
 
     // Print vector size
-    println!("Vector size: {}", bits_map.values().next().unwrap().len());
+    println!("Vector size: {}", ms1_bits_map.values().next().unwrap().len());
 
     // Prune bits_map
-    let bits_map = prune_unused_bins(&bits_map);
-    println!("Pruned dense binary vectors successfully.");
-
-    // Print pruned vector size
-    println!("Pruned vector size: {}", bits_map.values().next().unwrap().len());  
+    let ms1_bits_map = prune_unused_bins(&ms1_bits_map);
+    let ms2_bits_map = prune_unused_bins(&ms2_bits_map);
+    println!("Pruned vector size: {}", ms1_bits_map.values().next().unwrap().len());  
 
     // Compute pairwise cosine similarities
-    let (scans, mat) = compute_pairwise_similarity_matrix_ndarray(&bits_map);
+    let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_ndarray(&ms1_bits_map);
+    let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_ndarray(&ms2_bits_map);
     println!("Computed pairwise similarity matrix successfully.");
 
-    // Export the pairwise similarity matrix
-    let _ = write_similarity_matrix(&scans, &mat, &output_path, output_format);
-    println!("Exported similarity matrix successfully.");
+    let ms1_output_path = output_path.replace(".csv", "_ms1.csv");
+    let ms2_output_path = output_path.replace(".csv", "_ms2.csv");
+    let _ = write_similarity_matrix(&ms1_scans, &ms1_mat, &ms1_output_path, output_format.clone());
+    let _ = write_similarity_matrix(&ms2_scans, &ms2_mat, &ms2_output_path, output_format.clone());
+    println!("Exported MS1 similarity matrix successfully.");
 
     println!("Success! File written to: {}", output_path);
     let duration = start.elapsed();

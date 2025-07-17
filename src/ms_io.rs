@@ -1,9 +1,10 @@
-use std::fs::{File, Metadata};
+use std::fs::File;
 use std::fs;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::Path;
 use std::io::{Cursor, Read};
+use core::clone::Clone;
 use serde_json;
 use roxmltree::Document;
 use base64::engine::general_purpose;
@@ -20,6 +21,7 @@ pub struct Peak {
     pub intensity: f64,
 }
 
+#[derive(Clone)]
 pub struct SpectrumMetadata {
     pub index: String,
     pub id: String,
@@ -237,6 +239,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f64>
 }
 
 /// Supported output formats for the similarity matrix.
+#[derive(Clone, Copy)]
 pub enum OutputFormat {
     Csv,
     Tsv,
