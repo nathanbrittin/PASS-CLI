@@ -1,10 +1,11 @@
+// use std::collections::HashMap;
 use std::process;
 use std::fmt; // Import fmt for Display implementation
 // use std::path::Path;
 use std::io::{self, Write}; // Import io and Write traits for flushing output
 use std::time::Instant;
 mod ms_io;
-pub use ms_io::{import_mzml, OutputFormat, write_similarity_matrix};
+pub use ms_io::{import_mzml, OutputFormat, write_similarity_matrix, filter_by_ms_level};
 mod similarity;
 pub use similarity::{prune_background_columns, prune_unused_bins, spectrum_to_dense_vec, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
 
@@ -61,8 +62,13 @@ fn main() {
 
     let start = Instant::now();
     // Importing the data file
-    let spec_map = import_mzml(&input_path).expect("Failed to import mzml file. Check formatting.");
+    let (spec_map, spec_metadata) = import_mzml(&input_path).expect("Failed to import mzml file. Check formatting.");
     println!("Parsed {} spectra successfully.", spec_map.len());
+
+    // Filter to only MS1 and MS2
+    let ms1_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 1);
+    let ms2_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 2);
+    println!("Filtered MS1 and MS2 spectra successfully.");
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
     let max_mz = spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);

@@ -1,0 +1,7 @@
+1. Separate the MS1 and MS2 data processing into distinct functions to improve modularity.
+
+2. Implement the modified cosine similarity function that considers the difference in selected precursor m/z values for MS2 spectra.
+
+3. Make figures of heatmap
+   - Use a library like `plotters` or `ndarray` to visualize the similarity matrix as a heatmap.
+   - Ensure the heatmap is color-coded based on similarity scores.

@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{File, Metadata};
 use std::fs;
 use std::collections::HashMap;
 use std::error::Error;
@@ -20,9 +20,23 @@ pub struct Peak {
     pub intensity: f64,
 }
 
+pub struct SpectrumMetadata {
+    pub index: String,
+    pub id: String,
+    pub ms_level: u8,
+    pub base_peak_mz: f64,
+    pub base_peak_intensity: f64,
+    pub total_ion_current: f64,
+    pub scan_window_lower_limit: f64,
+    pub scan_window_upper_limit: f64,
+    pub target_mz: f64,
+    pub selected_ion: f64,
+    pub charge: u8
+}
+
 /// Parses an mzML XML file, returning a map from scan ID to its peaks.
 /// Returns Err if any spectrum has mismatched m/z vs intensity lengths.
-pub fn import_mzml(file_path: &str) -> Result<HashMap<String, Vec<Peak>>, Vec<String>> {
+pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashMap<String, SpectrumMetadata>), Vec<String>> {
     // Read the file
     let xml = fs::read_to_string(file_path).map_err(|e| vec![e.to_string()])?;
     // Parse
@@ -30,6 +44,7 @@ pub fn import_mzml(file_path: &str) -> Result<HashMap<String, Vec<Peak>>, Vec<St
 
     // Iterate over each spectrum
     let mut result: HashMap<String, Vec<Peak>> = HashMap::new();
+    let mut result_metadata: HashMap<String, SpectrumMetadata> = HashMap::new();
     let mut errors: Vec<String> = Vec::new();
 
     for spec in doc.descendants().filter(|n| n.tag_name().name() == "spectrum") {
@@ -38,6 +53,54 @@ pub fn import_mzml(file_path: &str) -> Result<HashMap<String, Vec<Peak>>, Vec<St
             .or_else(|| spec.attribute("id"))
             .unwrap_or("unknown")
             .to_string();
+
+        let id = spec.attribute("id").unwrap_or("unknown").to_string();
+        let index = spec.attribute("index").unwrap_or("unknown").to_string();
+
+        let mut base_peak_mz = 0.0;
+        let mut base_peak_intensity = 0.0;
+        let mut total_ion_current = 0.0;
+        let mut scan_window_lower_limit = 0.0;
+        let mut scan_window_upper_limit = 0.0;
+        let mut target_mz = 0.0;
+        let mut selected_ion = 0.0;
+        let mut charge = 0;
+
+        // Get metadata from cvParams
+        let mut ms_level = 1;
+        for cv in spec.descendants().filter(|n| n.tag_name().name() == "cvParam") {
+            // MS:1000511 = ms level, MS:1000504 = base peak m/z, MS:1000505 = base peak intensity, MS:1000285 = total ion current
+            // MS:1000501 = scan window lower limit, MS:1000500 = scan window upper limit
+            // MS:1000827 = target m/z, MS:1000744 = selected ion, MS:1000041 = charge
+            match cv.attribute("accession") {
+                Some("MS:1000511") => ms_level = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000504") => base_peak_mz = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000505") => base_peak_intensity = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000285") => total_ion_current = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000501") => scan_window_lower_limit = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000500") => scan_window_upper_limit = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000827") => target_mz = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000744") => selected_ion = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000041") => charge = cv.attribute("value").unwrap().parse().unwrap(),
+                _ => (),
+            }
+        }
+        
+        let spec_metadata = SpectrumMetadata {
+            index,
+            id,
+            ms_level,
+            base_peak_mz,
+            base_peak_intensity,
+            total_ion_current,
+            scan_window_lower_limit,
+            scan_window_upper_limit,
+            target_mz,
+            selected_ion,
+            charge
+        };
+
+        result_metadata.insert(scan.clone(), spec_metadata);
 
         let mut mzs = Vec::new();
         let mut ints = Vec::new();
@@ -99,9 +162,9 @@ pub fn import_mzml(file_path: &str) -> Result<HashMap<String, Vec<Peak>>, Vec<St
         }
     }
 
-    // Return or error
+    // Return result or errors
     if errors.is_empty() {
-        Ok(result)
+        Ok((result, result_metadata))
     } else {
         Err(errors)
     }
@@ -239,6 +302,32 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
     Ok(())
 }
 
+
+    /// Filter a map of scan IDs to their corresponding peak data by MS level.
+    ///
+    /// # Arguments
+    ///
+    /// * `map` - The map from scan IDs to their peak data.
+    /// * `map_metadata` - The map from scan IDs to their corresponding metadata.
+    /// * `ms_level` - The desired MS level to filter by.
+    ///
+    /// # Returns
+    ///
+    /// A new `HashMap` where each key-value pair is a filtered version of the
+    /// input map. Only scans with the specified MS level are included in the
+    /// output.
+pub fn filter_by_ms_level(map: HashMap<String, Vec<Peak>>, map_metadata: HashMap<String, SpectrumMetadata>, ms_level: u8) -> HashMap<String, Vec<Peak>> {
+    let mut filtered_map = HashMap::new();
+    for (scan_id, peaks) in map {
+        if let Some(metadata) = map_metadata.get(&scan_id) {
+            if metadata.ms_level == ms_level {
+                filtered_map.insert(scan_id, peaks);
+            }
+        }
+    }
+    filtered_map
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,7 +365,7 @@ mod tests {
             // Use the public API import_mzml_to_map
             let result = import_mzml(path_str);
             assert!(result.is_ok(), "Failed to import {}", fname);
-            let map = result.unwrap();
+            let (map, _) = result.unwrap();
 
             // Ensure the number of spectra matches the expected count
             let num_spectra = map.len();

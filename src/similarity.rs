@@ -354,7 +354,7 @@ mod tests {
     fn test_bitvec_and_cosine() -> Result<(), Vec<String>> {
         // Load sample data
         println!("Importing test mzML file...");
-        let map = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")?;
+        let (map, _) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")?;
         println!("Number of Spectra in test file: {}", map.len());
         // Determine the max m/z
         let max_mz = map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
