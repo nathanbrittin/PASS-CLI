@@ -1,9 +1,59 @@
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
 // use std::error::Error;
 use ndarray::{Array2};
 use crate::ms_io::Peak;
 use rayon::prelude::*;
 use std::time::Instant;
+use std::sync::Arc;
+
+type SparseVec = Vec<(usize, f32)>;
+
+
+
+/// Converts a spectrum from a sparse representation of peaks to a sparse representation as a vector.
+///
+/// Qualifying peaks are those with intensity above the given minimum and m/z within the given range.
+/// The output vector is sorted by bin index, and normalized in place to have unit length.
+///
+/// ### Arguments
+///
+/// * `peaks` - A slice of `Peak`s to convert.
+/// * `bin_width` - The width of each bin in the output vector.
+/// * `max_mz` - The upper bound of the m/z range.
+/// * `min_intensity` - The lower bound of the intensity range.
+///
+/// ### Returns
+///
+/// A sparse vector, represented as a `Vec<(usize, f32)>`.
+fn spectrum_to_sparse_vec(
+    peaks: &[Peak],
+    bin_width: f32,
+    max_mz: f32,
+    min_intensity: f32,
+) -> SparseVec {
+    // 1) Map each qualifying peak → (bin_idx, intensity)
+    let mut sv: SparseVec = peaks
+        .iter()
+        .filter(|p| p.intensity > min_intensity && (0.0..=max_mz).contains(&p.mz))
+        .map(|p| {
+            let idx = (p.mz / bin_width).floor() as usize;
+            (idx, p.intensity)
+        })
+        .collect();
+
+    // 2) Sort by bin index so merging in dot‐product is linear
+    sv.sort_unstable_by_key(|(idx, _)| *idx);
+
+    // 3) Normalize in place
+    let norm = sv.iter().map(|(_,i)| i*i).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for (_idx, val) in &mut sv {
+            *val /= norm;
+        }
+    }
+    sv
+}
+
 
 /// Converts a spectrum from a sparse representation of peaks to a dense representation as a vector.
 ///
@@ -26,22 +76,22 @@ use std::time::Instant;
 /// ### Returns
 ///
 /// * A `Vec<f32>` representing the dense spectrum.
-pub fn spectrum_to_dense_vec(peaks: &[Peak], bin_width: f32, max_mz: f64, minimum_intensity: f64) -> Vec<f32> {
+pub fn spectrum_to_dense_vec(peaks: &[Peak], bin_width: f32, max_mz: f32, minimum_intensity: f32) -> Vec<f32> {
     // Compute number of bins as ceil(max_mz / bin_width)
-    let nbins = (max_mz / bin_width as f64).ceil() as usize;
+    let nbins = (max_mz / bin_width).ceil() as usize;
     // Create a Vec<f32> initialized to 0.0
     let mut bins = vec![0.0_f32; nbins];
     for p in peaks {
         // Only consider peaks with intensity >= minimum_intensity
-        if p.intensity <= minimum_intensity as f64 {
+        if p.intensity <= minimum_intensity {
             continue;
         }
         // Only consider peaks in [0.0, max_mz]
-        if (0.0_f64..=max_mz as f64).contains(&p.mz) {
+        if (0.0_f32..=max_mz).contains(&p.mz) {
             // Determine which bin this m/z belongs in
-            let idx = ((p.mz as f64) / (bin_width as f64)).floor() as usize;
+            let idx = ((p.mz) / (bin_width)).floor() as usize;
             if idx < nbins {
-                bins[idx] = p.intensity as f32;
+                bins[idx] = p.intensity;
             }
         }
     }
@@ -87,6 +137,28 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     }
 }
 
+/// Computes the cosine similarity between two sparse vectors.
+///
+/// The cosine similarity is a measure of similarity between two non-zero vectors of an inner product space.
+/// For sparse vectors, it is calculated as the dot product of the vectors divided by the product of their magnitudes.
+/// The vectors must be represented as slices of (index, value) pairs, sorted by index.
+///
+/// ### Arguments
+///
+/// * `a` - The first sparse vector.
+/// * `b` - The second sparse vector.
+///
+/// ### Returns
+///
+/// * A f32 value representing the cosine similarity between the two vectors. The value ranges from 0.0 to 1.0.
+///
+/// ### Notes
+///
+/// * If either vector is empty or has a magnitude of zero, the function returns 0.0.
+pub fn cosine_similarity_sparse(a: &SparseVec, b: &SparseVec) -> f32 {
+    sparse_dot(a, b)
+}
+
 /// Computes the dot product of two vectors.
 ///
 /// The dot product is the sum of the products of the corresponding entries of the two sequences of numbers.
@@ -106,6 +178,40 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> f32 {
 pub fn dot(v1: &[f32], v2: &[f32]) -> f32 {
     // assuming v1.len() == v2.len()
     v1.iter().zip(v2).map(|(a, b)| a * b).sum()
+}
+
+/// Computes the dot product of two sparse vectors.
+///
+/// The sparse vectors are represented as a slice of (index, value) pairs, sorted by index.
+/// The dot product is the sum of the products of the corresponding values of the two sequences.
+///
+/// This function assumes that the vectors are sorted by index.
+///
+/// ### Arguments
+///
+/// * `a` - The first sparse vector.
+/// * `b` - The second sparse vector.
+///
+/// ### Returns
+///
+/// * A f32 value representing the dot product of the two vectors.
+fn sparse_dot(a: &SparseVec, b: &SparseVec) -> f32 {
+    let mut sum = 0.0;
+    let (mut ia, mut ib) = (0, 0);
+    while ia < a.len() && ib < b.len() {
+        let ai = a[ia].0;
+        let bi = b[ib].0;
+        match ai.cmp(&bi) {
+            std::cmp::Ordering::Less    => ia += 1,
+            std::cmp::Ordering::Greater => ib += 1,
+            std::cmp::Ordering::Equal   => {
+                sum += a[ia].1 * b[ib].1;
+                ia += 1;
+                ib += 1;
+            }
+        }
+    }
+    sum
 }
 
 /// Normalizes a vector in-place.
@@ -149,7 +255,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let start = Instant::now();
     // 1) Order and sort scan IDs numerically
     let mut scans: Vec<String> = bits_map.keys().cloned().collect();
-    scans.sort_by(|a, b| a.parse::<f64>().unwrap().partial_cmp(&b.parse::<f64>().unwrap()).unwrap());
+    scans.sort_by(|a, b| a.parse::<f32>().unwrap().partial_cmp(&b.parse::<f32>().unwrap()).unwrap());
     let elapsed = start.elapsed();
     println!("Sorted scan IDs in {:.2?}", elapsed);
     let start = Instant::now();
@@ -192,6 +298,109 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     (scans, mat)
 }
 
+    /// Computes a pairwise similarity matrix for sparse vectors based on their cosine similarity.
+    ///
+    /// This function takes a map from scan IDs to their sparse vector representations,
+    /// computes the cosine similarity between each pair of vectors, and returns both
+    /// the ordered list of scan IDs and the resulting similarity matrix. The matrix
+    /// is symmetric, with diagonal elements set to 1.0 (indicating identical vectors).
+    ///
+    /// ### Arguments
+    ///
+    /// * `sparse_map` - A reference to a HashMap where keys are scan IDs and values
+    ///                 are their corresponding sparse vector representations.
+    ///
+    /// ### Returns
+    ///
+    /// A tuple containing:
+    /// - A `Vec<String>` of scan IDs in the order they appear in the matrix.
+    /// - An `Array2<f32>` representing the pairwise similarity matrix, where each
+    ///   cell contains the cosine similarity score between the corresponding vectors.
+pub fn compute_pairwise_similarity_matrix_sparse(
+    sparse_map: &HashMap<String, SparseVec>,
+) -> (Vec<String>, Array2<f32>) {
+    // 1) Sort scan IDs numerically
+    let start = Instant::now();
+    let mut scans: Vec<String> = sparse_map.keys().cloned().collect();
+    scans.sort_by(|a, b| {
+        a.parse::<f32>()
+            .unwrap()
+            .partial_cmp(&b.parse::<f32>().unwrap())
+            .unwrap()
+    });
+    println!("Sorted scan IDs in {:.2?}", start.elapsed());
+
+    // 2) Cache &Arc the slices for thread-safe sharing
+    let start = Instant::now();
+    let spectra: Arc<Vec<&SparseVec>> =
+        Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
+    let n = scans.len();
+    let mut mat = Array2::<f32>::zeros((n, n));
+    println!("Cached scan IDs in {:.2?}", start.elapsed());
+
+    // 3) Parallel upper-triangle
+    let start = Instant::now();
+    let entries: Vec<(usize, usize, f32)> = (0..n)
+        .into_par_iter()
+        .flat_map(|i| {
+            let spectra = Arc::clone(&spectra);
+            // Inner loop is now sequential
+            (i + 1..n).into_par_iter().map(move |j| {
+                let sim = cosine_similarity_sparse(spectra[i], spectra[j]);
+                (i, j, sim)
+            })
+        })
+        .collect();
+    println!("Computed cosine similarities in {:.2?}", start.elapsed());
+
+    // 4) Fill diagonal + symmetrize
+    let start = Instant::now();
+    for i in 0..n {
+        mat[(i, i)] = 1.0;
+    }
+    for (i, j, sim) in entries {
+        mat[(i, j)] = sim;
+        mat[(j, i)] = sim;
+    }
+    println!("Filled matrix in {:.2?}", start.elapsed());
+
+    (scans, mat)
+}
+
+/// Computes a map from scan IDs to sparse vector representations of their peaks.
+///
+/// Each sparse vector representation is a list of (bin index, intensity) pairs,
+/// where each pair corresponds to a peak that falls within a specified m/z range and
+/// has an intensity greater than the minimum threshold. The `spectrum_to_sparse_vec`
+/// function is utilized to compute each sparse vector. The vector is sorted by bin index
+/// and normalized to ensure efficient computation in subsequent similarity evaluations.
+///
+/// ### Arguments
+///
+/// * `spec_map` - A reference to a HashMap where keys are scan IDs and values are
+///                their corresponding spectrum data.
+/// * `bin_width` - The width of each bin in m/z units.
+/// * `max_mz` - The maximum m/z value to consider.
+/// * `minimum_intensity` - The minimum intensity threshold for peaks to be included.
+///
+/// ### Returns
+///
+/// A `HashMap<String, SparseVec>` where keys are scan IDs and values are their
+/// corresponding sparse vector representations.
+pub fn compute_sparse_vec_map(
+    spec_map: &HashMap<String, Vec<Peak>>,
+    bin_width: f32,
+    max_mz: f32,
+    minimum_intensity: f32,
+) -> HashMap<String, SparseVec> {
+    let mut map = HashMap::with_capacity(spec_map.len());
+    for (scan, peaks) in spec_map {
+        let sv = spectrum_to_sparse_vec(peaks, bin_width, max_mz, minimum_intensity);
+        map.insert(scan.clone(), sv);
+    }
+    map
+}
+
 /// Compute a map from scan IDs to binary bit vector representations of their peaks
 /// at the given bin width and maximum m/z.
 ///
@@ -218,8 +427,8 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
 pub fn compute_dense_vec_map(
     spec_map: &HashMap<String, Vec<Peak>>,
     bin_width: f32,
-    max_mz: f64,
-    minimum_intensity: f64
+    max_mz: f32,
+    minimum_intensity: f32
 ) -> HashMap<String, Vec<f32>> {
     let mut bits_map = HashMap::with_capacity(spec_map.len());
     for (scan, peaks) in spec_map {
@@ -336,11 +545,52 @@ pub fn prune_background_columns(
     */
 }
 
+    /// Remove bins from sparse vectors if they appear in at least `min_frac * n_spec` spectra.
+    ///
+    /// This is useful for removing background noise from the similarity matrix.
+    ///
+    /// ### Arguments
+    ///
+    /// * `sparse_map` - Mutable map from scan ID to its sparse vector
+    /// * `min_frac` - Minimum fraction of spectra that must contain a hit in the bin
+    ///                for it to be considered a background bin. e.g. 0.5 for 50%
+pub fn prune_background_bins_sparse(
+    sparse_map: &mut HashMap<String, SparseVec>,
+    min_frac: f64,
+) {
+    let n_spec = sparse_map.len();
+    if n_spec == 0 {
+        return;
+    }
+    // compute how many spectra a given bin appears in
+    let mut counts: HashMap<usize, usize> = HashMap::new();
+    for vec in sparse_map.values() {
+        for &(bin, _) in vec {
+            *counts.entry(bin).or_insert(0) += 1;
+        }
+    }
+    // threshold = ceil(n_spec * min_frac)
+    let threshold = (n_spec as f64 * min_frac).ceil() as usize;
+    // collect all bins that are “too common”
+    let bg_bins: HashSet<usize> = counts
+        .into_iter()
+        .filter_map(|(bin, cnt)| if cnt >= threshold { Some(bin) } else { None })
+        .collect();
+    // now prune each sparse vector in place
+    for vec in sparse_map.values_mut() {
+        vec.retain(|&(bin, _)| !bg_bins.contains(&bin));
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::{compute_pairwise_similarity_matrix_ndarray,
+        compute_pairwise_similarity_matrix_sparse,
+        SparseVec};
     use crate::ms_io::import_mzml;
+    use std::collections::HashMap;
+
 
     /// Tests the generation of a map of binary bit vectors from a map of spectra,
     /// and then computes the cosine similarity matrix from the binary bit vectors.
@@ -350,6 +600,57 @@ mod tests {
     /// and prints out the number of spectra in the file, the maximum m/z, and the
     /// bin width used. The resulting similarity matrix is then printed to the
     /// console.
+
+    /// Helper: turn each non-zero entry in a dense Vec<f32> into (index, value)
+    fn dense_to_sparse(bits_map: &HashMap<String, Vec<f32>>) -> HashMap<String, SparseVec> {
+        bits_map.iter().map(|(k, v)| {
+            let sv: SparseVec = v.iter()
+                .enumerate()
+                .filter_map(|(i, &x)| if x != 0.0 { Some((i, x)) } else { None })
+                .collect();
+            (k.clone(), sv)
+        }).collect()
+    }
+
+    #[test]
+    fn sparse_matches_dense() {
+        // 1) Build a tiny “normalized” dense map
+        let mut bits_map: HashMap<String, Vec<f32>> = HashMap::new();
+        // orthonormal basis vectors
+        bits_map.insert("1".into(), vec![1.0, 0.0]);
+        bits_map.insert("2".into(), vec![0.0, 1.0]);
+        // 45° vector
+        let norm = (2.0f32).sqrt();
+        bits_map.insert("3".into(), vec![1.0 / norm, 1.0 / norm]);
+
+        // 2) Dense similarity
+        let (dense_scans, dense_mat) = compute_pairwise_similarity_matrix_ndarray(&bits_map);
+
+        // 3) Convert to sparse & compute
+        let sparse_map = dense_to_sparse(&bits_map);
+        let (sparse_scans, sparse_mat) =
+            compute_pairwise_similarity_matrix_sparse(&sparse_map);
+
+        // 4) Verify same ordering and dimensions
+        assert_eq!(dense_scans, sparse_scans);
+        let n = dense_scans.len();
+        assert_eq!(dense_mat.shape(), &[n, n]);
+        assert_eq!(sparse_mat.shape(), &[n, n]);
+
+        // 5) Compare every entry (allowing tiny float-rounding slack)
+        for i in 0..n {
+            for j in 0..n {
+                let d = dense_mat[(i, j)];
+                let s = sparse_mat[(i, j)];
+                assert!(
+                    (d - s).abs() < 1e-6,
+                    "Mismatch at ({},{}) → dense={}, sparse={}",
+                    i, j, d, s
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_bitvec_and_cosine() -> Result<(), Vec<String>> {
         // Load sample data
@@ -357,7 +658,7 @@ mod tests {
         let (map, _) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")?;
         println!("Number of Spectra in test file: {}", map.len());
         // Determine the max m/z
-        let max_mz = map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
+        let max_mz = map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f32::max)).fold(0., f32::max);
         println!("Max m/z: {}", max_mz);
         // Determine bin width
         let bin_width = 0.01;

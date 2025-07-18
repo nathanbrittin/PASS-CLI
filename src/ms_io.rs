@@ -17,8 +17,8 @@ use ndarray::{Array2, Axis};
 /// A single m/z-intensity pair.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Peak {
-    pub mz: f64,
-    pub intensity: f64,
+    pub mz: f32,
+    pub intensity: f32,
 }
 
 #[derive(Clone)]
@@ -26,13 +26,13 @@ pub struct SpectrumMetadata {
     pub index: String,
     pub id: String,
     pub ms_level: u8,
-    pub base_peak_mz: f64,
-    pub base_peak_intensity: f64,
-    pub total_ion_current: f64,
-    pub scan_window_lower_limit: f64,
-    pub scan_window_upper_limit: f64,
-    pub target_mz: f64,
-    pub selected_ion: f64,
+    pub base_peak_mz: f32,
+    pub base_peak_intensity: f32,
+    pub total_ion_current: f32,
+    pub scan_window_lower_limit: f32,
+    pub scan_window_upper_limit: f32,
+    pub target_mz: f32,
+    pub selected_ion: f32,
     pub charge: u8
 }
 
@@ -104,8 +104,8 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
 
         result_metadata.insert(scan.clone(), spec_metadata);
 
-        let mut mzs = Vec::new();
-        let mut ints = Vec::new();
+        let mut mzs: Vec<f32> = Vec::new();
+        let mut ints: Vec<f32> = Vec::new();
 
         // Iterate over each binary data array
         for bda in spec.descendants().filter(|n| n.tag_name().name() == "binaryDataArray") {
@@ -135,8 +135,12 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
             {
                 if is_mz {
                     mzs = decode_mz_array(blob, is_64bit, compressed);
+                    // Convert to f32
+                    mzs = mzs.iter().map(|&x| x as f32).collect();
                 } else if is_int {
                     ints = decode_int_array(blob, is_64bit, compressed);
+                    // Convert to f32
+                    ints = ints.iter().map(|&x| x as f32).collect();
                 }
             }
         }
@@ -172,7 +176,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
     }
 }
 
-fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f64> {
+fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> {
     // 1) Base64 decode
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
@@ -192,20 +196,20 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f64> 
 
     // 3) Read as 32 or 64-bit little-endian floats
     let mut cursor = Cursor::new(&data);
-    let mut floats = Vec::new();
+    let mut floats: Vec<f32> = Vec::new();
     if is_64bit {
         while let Ok(val) = cursor.read_f64::<LittleEndian>() {
-            floats.push(val);
+            floats.push(val as f32);
         }
     } else {
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
-            floats.push(val as f64);
+            floats.push(val);
         }
     }
     floats
 }
 
-fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f64> {
+fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> {
     // Base64 decode
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
@@ -225,14 +229,14 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f64>
 
     // Read as 32 or 64-bit little-endian integers
     let mut cursor = Cursor::new(&data);
-    let mut floats = Vec::new();
+    let mut floats: Vec<f32> = Vec::new();
     if is_64bit {
         while let Ok(val) = cursor.read_f64::<LittleEndian>() {
-            floats.push(val);
+            floats.push(val as f32);
         }
     } else {
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
-            floats.push(val as f64);
+            floats.push(val);
         }
     }
     floats

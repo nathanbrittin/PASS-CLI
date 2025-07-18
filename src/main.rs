@@ -7,7 +7,7 @@ use std::time::Instant;
 mod ms_io;
 pub use ms_io::{import_mzml, OutputFormat, write_similarity_matrix, filter_by_ms_level};
 mod similarity;
-pub use similarity::{prune_background_columns, prune_unused_bins, spectrum_to_dense_vec, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
+pub use similarity::{compute_pairwise_similarity_matrix_sparse, prune_background_columns, prune_background_bins_sparse, prune_unused_bins, spectrum_to_dense_vec, compute_sparse_vec_map, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
 
 fn main() {
 
@@ -34,7 +34,9 @@ fn main() {
 
     let similarity_metric = prompt_similarity_metric();
 
-    let minimum_intensity = prompt_min_intensity();
+    let ms1_minimum_intensity = prompt_min_intensity(true);
+
+    let ms2_minimum_intensity = prompt_min_intensity(false);
 
     // let max_peaks = prompt_max_peaks();
 
@@ -47,7 +49,8 @@ fn main() {
     println!("||    Input file: {}", input_path);
     println!("||    Output file: {}", output_path);
     println!("||    Similarity metric: {}", similarity_metric);
-    println!("||    Minimum intensity threshold: {:.2}", minimum_intensity);
+    println!("||    MS1 Minimum intensity threshold: {:.2}", ms1_minimum_intensity);
+    println!("||    MS2 Minimum intensity threshold: {:.2}", ms2_minimum_intensity);
     println!("||    Mass tolerance: {:.2}", mass_tolerance);
     // println!("||    Maximum number of peaks: {}", max_peaks);
     // println!("||    Verbose flag: {}", verbose);
@@ -68,37 +71,57 @@ fn main() {
     // Filter to only MS1 and MS2
     let ms1_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 1);
     let ms2_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 2);
-    println!("Filtered MS1 and MS2 spectra successfully.");
+    println!("Number of MS1 spectra: {}", ms1_spec_map.len());
+    println!("Number of MS2 spectra: {}", ms2_spec_map.len());
+
+    // Print the first MS1 spectrum
+    println!("First MS1 Spectrum:");
+    println!("{:?}", ms1_spec_map.values().next().unwrap()[0]);
+
+    // Print the first MS2 spectrum
+    println!("First MS2 Spectrum:");
+    println!("{:?}", ms2_spec_map.values().next().unwrap()[0]);
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
-    let max_ms1_mz = ms1_spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f64::max)).fold(0., f64::max);
+    let max_ms1_mz = ms1_spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f32::max)).fold(0., f32::max);
     // Get vector length for binning
-    let vector_length = (max_ms1_mz / mass_tolerance as f64).ceil() as usize;
+    let vector_length = (max_ms1_mz / mass_tolerance).ceil() as usize;
     println!("Min m/z: 0.0, Max m/z: {}, Bin width: {:.2}, Vector Size: {}", max_ms1_mz, mass_tolerance, vector_length);
 
     // Compute dense binary vectors
-    let mut ms1_bits_map = compute_dense_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, minimum_intensity);
-    let mut ms2_bits_map = compute_dense_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, minimum_intensity);
+    println!("Computing MS1 dense binary vectors...");
+    // let mut ms1_bits_map = compute_dense_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, ms1_minimum_intensity);
+    let mut ms1_bits_map = compute_sparse_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, ms1_minimum_intensity);
+    println!("Computing MS2 dense binary vectors...");
+    // let mut ms2_bits_map = compute_dense_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, ms2_minimum_intensity);
+    let mut ms2_bits_map = compute_sparse_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, ms2_minimum_intensity);
     println!("Computed dense binary vectors successfully.");
 
     // Filter background signals
-    prune_background_columns(&mut ms1_bits_map, 0.5);
-    prune_background_columns(&mut ms2_bits_map, 0.5);
+    println!("Pruning background columns...");
+    prune_background_bins_sparse(&mut ms1_bits_map, 0.5);
+    prune_background_bins_sparse(&mut ms2_bits_map, 0.5);
     println!("Pruned background columns successfully.");
 
-    // Print vector size
-    println!("Vector size: {}", ms1_bits_map.values().next().unwrap().len());
+    // // Print vector size
+    // println!("Vector size: {}", ms1_bits_map.values().next().unwrap().len());
 
-    // Prune bits_map
-    let ms1_bits_map = prune_unused_bins(&ms1_bits_map);
-    let ms2_bits_map = prune_unused_bins(&ms2_bits_map);
-    println!("Pruned vector size: {}", ms1_bits_map.values().next().unwrap().len());  
+    // // Prune bits_map
+    // println!("Pruning unused bins...");
+    // let ms1_bits_map = prune_unused_bins(&ms1_bits_map);
+    // let ms2_bits_map = prune_unused_bins(&ms2_bits_map);
+    // println!("Pruned vector size: {}", ms1_bits_map.values().next().unwrap().len());  
 
     // Compute pairwise cosine similarities
-    let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_ndarray(&ms1_bits_map);
-    let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_ndarray(&ms2_bits_map);
+    println!("Computing MS1 pairwise similarity matrix...");
+    // let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_ndarray(&ms1_bits_map);
+    let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_sparse(&ms1_bits_map);
+    println!("Computing MS2 pairwise similarity matrix...");
+    // let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_ndarray(&ms2_bits_map);
+    let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_sparse(&ms2_bits_map);
     println!("Computed pairwise similarity matrix successfully.");
 
+    println!("Exporting similarity matricies...");
     let ms1_output_path = output_path.replace(".csv", "_ms1.csv");
     let ms2_output_path = output_path.replace(".csv", "_ms2.csv");
     let _ = write_similarity_matrix(&ms1_scans, &ms1_mat, &ms1_output_path, output_format.clone());
@@ -255,11 +278,15 @@ fn prompt_similarity_metric() -> String {
     }
 }
 
-fn prompt_min_intensity() -> f64 {
+fn prompt_min_intensity(is_ms1: bool) -> f32 {
     loop {
         println!("----------------------------------------------------------------------------------------------");
         // Prompt for minimum intensity threshold
-        print!("||    Please enter the desired minimum intensity threshold (default: 1.0): ");
+        if is_ms1 {
+            print!("||    Please enter the desired MS1 minimum intensity threshold (default: 1.0): ");
+        } else {
+            print!("||    Please enter the desired MS2 minimum intensity threshold (default: 0.0): ");
+        }
         let mut min_int_input = String::new();
         io::stdout().flush().unwrap();
 
@@ -278,7 +305,7 @@ fn prompt_min_intensity() -> f64 {
         };
 
         // Parse
-        match input_min_int_str.parse::<f64>() {
+        match input_min_int_str.parse::<f32>() {
             Ok(min_intensity) if min_intensity > 0.0 => {
                 // Erase the prompt+input line
                 print!("\r\x1B[K");
