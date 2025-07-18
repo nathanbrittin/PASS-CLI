@@ -1,106 +1,182 @@
 # SpectraMap-CLI
 
-SpectraMap-CLI is a lightweight cross-platform Rust-based command-line tool for untargeted mass spectrometry data spectral similarity analysis. This tool performs similarity comparisons between all collected spectra in a single MS run and outputs the results as a CSV, TSV, and JSON similarity matrix.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/ci.yml)](https://github.com/YourUser/SpectraMap-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/tests.yml?label=tests)](https://github.com/YourUser/SpectraMap-CLI/actions)
+
+SpectraMap-CLI is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats.
+
+---
+
+## Table of Contents
+
+1. [Features](#features)
+2. [Prerequisites](#prerequisites)
+3. [Installation](#installation)
+4. [Usage](#usage)
+5. [Quick Start Example](#quick-start-example)
+6. [Example Data & Expected Output](#example-data--expected-output)
+7. [Output](#output)
+8. [Similarity Methods](#similarity-methods)
+9. [Performance](#performance)
+10. [Roadmap](#roadmap)
+11. [Tests](#tests)
+12. [Contact & Support](#contact--support)
+13. [Contributing](#contributing)
+14. [License](#license)
+
+---
 
 ## Features
 
-- **File Format Support**: mzML and mzXML files
-- **Similarity Methods**: 
-  - Cosine similarity
-  - Modified cosine similarity (accounts for mass shifts and neutral losses)
-- **Performance**: Multi-threaded processing using Rayon for fast computation
-- **Cross-platform**: Works on Windows, macOS, and Linux
-- **Flexible Filtering**: Filter spectra by intensity threshold and limit processing count
+* **Multi-format support**: Read `mzML` and `mzXML` files out of the box.
+* **Similarity metrics**:
+
+  * Standard cosine similarity
+  * Modified cosine similarity (accounts for neutral losses and precursor mass shifts)
+* **Parallel processing**: Built on [Rayon](https://crates.io/crates/rayon) for efficient multi‑threaded computation.
+* **Flexible filtering**: Discard low‑intensity peaks and limit the number of spectra for rapid prototyping.
+* **Output formats**: Export a full similarity matrix as `CSV`, `TSV`, or `JSON`.
+
+## Prerequisites
+
+* Rust (1.60 or later) and `cargo`
+* Operating systems: Windows, macOS, Linux
 
 ## Installation
 
-### From Source
+Clone the repository and compile:
 
-1. Install Rust (if not already installed):
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
+```bash
+# Clone the project
+git clone https://github.com/YourUser/SpectraMap-CLI.git
+cd SpectraMap-CLI
 
-2. Clone and build:
-   ```bash
-   git clone <repository-url>
-   cd spectramap-cli
-   cargo build --release
-   ```
+# Build in release mode
+cargo build --release
+```
 
-3. The executable is available at `target/release/spectralmap-cli`
+The resulting executable is:
+
+* `target/release/spectramap-cli` (Unix)
+* `target\release\spectramap-cli.exe` (Windows)
 
 ## Usage
 
-### Basic Usage
+SpectraMap-CLI features an interactive, prompt-driven workflow to simplify operation for users who may be unfamiliar with complex command-line flags or syntax. On launch, the tool will guide you through each configuration step—there’s no need to remember options or refer back to documentation mid-run.
+
+To get started, just execute the program:
 
 ```bash
-spectramap-cli -i input.mzML -o similarity_matrix.csv
+# Unix
+./target/release/spectramap-cli
+
+# Windows
+.\\target\\release\\spectramap-cli.exe
 ```
 
-### Advanced Options
+You will be prompted to enter:
+
+1. **Input file path** (mzML or mzXML)
+2. **Output file path** (CSV, TSV, or JSON)
+3. **Similarity metric** (`cosine` or `modified-cosine`)
+4. **Minimum peak intensity** (e.g. `1000.0`)
+5. **Mass tolerance** in Da (for modified cosine, e.g. `0.02`)
+6. **Maximum number of spectra** (or leave blank to process all)
+7. **Output format** (`csv`, `tsv`, or `json`)
+8. **Verbose mode** (`y`/`n`)
+
+After entry, SpectraMap‑CLI computes and saves the matrix.
+
+## Quick Start Example
+
+Assuming you have a small test file at `examples/test_run.mzML`:
 
 ```bash
-ms-similarity-tool \
-  --input data.mzML \
-  --output results.csv \
-  --method modified-cosine \
-  --min-intensity 1000.0 \
-  --mass-tolerance 0.01 \
+# Run the tool
+./target/release/spectramap-cli
+
+# Enter when prompted:
+# Input file path: examples/test_run.mzML
+# Output file path: examples/test_similarity.csv
+# Similarity metric: cosine
+# Minimum peak intensity: 1000.0
+# Mass tolerance: 0.02
+# Maximum number of spectra: [ENTER]
+# Output format: csv
+# Verbose mode: n
 ```
 
-### Command Line Options
+Inspect `examples/test_similarity.csv`—it should look like:
 
-- `-i, --input <FILE>`: Input mzML or mzXML file (required)
-- `-o, --output <FILE>`: Output CSV file for similarity matrix (required)
-- `-m, --method <METHOD>`: Similarity method [`cosine`, `modified-cosine`] (default: `cosine`)
-- `--min-intensity <FLOAT>`: Minimum intensity threshold for peaks (default: 1000.0)
-- `--mass-tolerance <FLOAT>`: Mass tolerance for modified cosine similarity in Da (default: 0.02)
-- `--max-spectra <INT>`: Maximum number of spectra to process (for testing)
-- `-v, --verbose`: Enable verbose output
-- `-h, --help`: Print help information
-
-## Output Format
-
-The tool outputs a CSV file containing the similarity matrix where:
-- First row contains retention times as column headers
-- First column contains retention times for each spectrum
-- Each cell contains the similarity score between the corresponding spectra
-- Values range from 0.0 (no similarity) to 1.0 (identical spectra)
-
-Example output structure:
 ```csv
-RT,1.234,2.456,3.789
-1.234,1.000000,0.750000,0.200000
-2.456,0.750000,1.000000,0.450000
-3.789,0.200000,0.450000,1.000000
+RT,45.1,82.3,120.5
+45.1,1.000000,0.812345,0.234567
+82.3,0.812345,1.000000,0.456789
+120.5,0.234567,0.456789,1.000000
 ```
+
+## Example Data & Expected Output
+
+A tiny sample mzML is provided under `examples/`. The expected similarity matrices (`.csv`, `.tsv`, and `.json`) live alongside it, so you can verify correct installation without your own data.
+
+## Output
+
+The output file contains an N×N similarity matrix, where N is the number of spectra:
+
+* The first row/column holds spectrum retention times or scan identifiers.
+* Each cell `[i,j]` is the similarity score (0.0 – 1.0).
 
 ## Similarity Methods
 
 ### Cosine Similarity
-- Standard cosine similarity between spectral vectors
-- Matches peaks within 0.01 Da tolerance
-- Good for general spectral comparison
+
+* Standard vector cosine similarity with default peak m/z tolerance of `0.01` Da.
+* Good for overall spectral shape comparisons.
 
 ### Modified Cosine Similarity
-- Enhanced version that accounts for precursor mass differences
-- Useful for comparing spectra with mass shifts or neutral losses
-- Particularly effective for MS2 fragmentation spectra
-- Uses user-defined mass tolerance (default: 0.02 Da)
 
-## Performance Considerations
+* Compensates for mass shifts and neutral losses between MS/MS spectra.
+* Suitable for detecting related fragmentation patterns across different precursor masses.
+* User‑configurable tolerance (`--mass-tolerance`).
 
-- The tool uses parallel processing for similarity calculations
-- Memory usage scales with O(n²) where n is the number of spectra
-- For large datasets (>10,000 spectra), consider using `--max-spectra` for testing
-- Progress bar shows estimation of completion time when `--verbose` is enabled
+## Performance
 
-## Future Development
+* Utilizes Rayon to parallelize O(N²) comparisons.
+* Memory usage scales quadratically with the number of spectra.
+* For large runs (> 10,000 spectra), consider downsampling or limiting via prompts.
+* `Verbose` mode prints per‑step timings.
 
-This CLI tool serves as the foundation for a full interactive visualization tool that will include:
-- Interactive heatmap visualization
-- Chromatogram display with similarity mapping
-- Real-time spectral comparison
-- Advanced preprocessing options
-- Extracted ion chromatogram support
+## Roadmap
+
+* [ ] Preprocessing filters (e.g., baseline subtraction, decharging)
+* [ ] Chromatogram overlay with similarity mapping
+* [ ] Export to network formats (e.g., GEXF, GraphML)
+* [ ] Output visualization scripts for heatmaps and network graphs
+
+## Tests
+
+Run unit and integration tests:
+
+```bash
+cargo test -- --nocapture
+```
+
+Integration tests live in `tests/`, using sample data in `examples/`. CI runs these on each push.
+
+## Contact & Support
+
+* **GitHub Issues:** [https://github.com/YourUser/SpectraMap-CLI/issues](https://github.com/YourUser/SpectraMap-CLI/issues)
+* **Email:** Nathan Brittin [nathan.brittin@wisc.edu](mailto:nathan.brittin@wisc.edu)
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/YourFeature`)
+3. Commit your changes (`git commit -m "Add feature X"`)
+4. Push to your branch (`git push origin feature/YourFeature`)
+5. Open a Pull Request
+
+Please follow Rust formatting conventions (`cargo fmt`) and include tests where applicable.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
