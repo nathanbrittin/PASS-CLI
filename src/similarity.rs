@@ -240,8 +240,7 @@ fn normalize(v: &mut [f32]) {
 ///
 /// ### Arguments
 ///
-/// * `bits_map` - A reference to a HashMap where keys are scan IDs and values are 
-///                their corresponding binary bit vector representations.
+/// * `bits_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding binary bit vector representations.
 ///
 /// ### Returns
 ///
@@ -257,7 +256,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let mut scans: Vec<String> = bits_map.keys().cloned().collect();
     scans.sort_by(|a, b| a.parse::<f32>().unwrap().partial_cmp(&b.parse::<f32>().unwrap()).unwrap());
     let elapsed = start.elapsed();
-    println!("Sorted scan IDs in {:.2?}", elapsed);
+    println!("Sorted scan IDs in {elapsed:.2?}");
     let start = Instant::now();
     // 2) Cache references to the spectra slices inside an Arc for thread-safe sharing
     use std::sync::Arc;
@@ -266,7 +265,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
     let elapsed = start.elapsed();
-    println!("Cached scan IDs in {:.2?}", elapsed);
+    println!("Cached scan IDs in {elapsed:.2?}");
     let start = Instant::now();
     // 3) Parallel compute upper-triangle similarities
     let entries: Vec<(usize, usize, f32)> = (0..n)
@@ -282,7 +281,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
         })
         .collect();
     let elapsed = start.elapsed();
-    println!("Computed cosine similarities in {:.2?}", elapsed);
+    println!("Computed cosine similarities in {elapsed:.2?}");
     let start = Instant::now();
     // 4) Fill matrix: diagonal and symmetrize
     for i in 0..n {
@@ -293,7 +292,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
         mat[(j, i)] = sim;
     }
     let elapsed = start.elapsed();
-    println!("Filled matrix in {:.2?}", elapsed);
+    println!("Filled matrix in {elapsed:.2?}");
 
     (scans, mat)
 }
@@ -307,8 +306,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     ///
     /// ### Arguments
     ///
-    /// * `sparse_map` - A reference to a HashMap where keys are scan IDs and values
-    ///                 are their corresponding sparse vector representations.
+    /// * `sparse_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding sparse vector representations.
     ///
     /// ### Returns
     ///
@@ -377,8 +375,7 @@ pub fn compute_pairwise_similarity_matrix_sparse(
 ///
 /// ### Arguments
 ///
-/// * `spec_map` - A reference to a HashMap where keys are scan IDs and values are
-///                their corresponding spectrum data.
+/// * `spec_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding spectrum data.
 /// * `bin_width` - The width of each bin in m/z units.
 /// * `max_mz` - The maximum m/z value to consider.
 /// * `minimum_intensity` - The minimum intensity threshold for peaks to be included.
@@ -415,8 +412,7 @@ pub fn compute_sparse_vec_map(
 /// 
 /// ### Arguments
 ///
-/// * `spec_map` - A reference to a HashMap where keys are scan IDs and values are 
-///                their corresponding spectrum data.
+/// * `spec_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding spectrum data.
 /// * `bin_width` - The width of each bin in m/z units.
 /// * `max_mz` - The maximum m/z value to consider.
 ///
@@ -490,8 +486,7 @@ pub fn prune_unused_bins(
 /// # Arguments
 ///
 /// * `bits_map` - Mutable map from scan ID to its dense vector
-/// * `min_frac` - Minimum fraction of spectra that must contain a hit in the column
-///                for it to be considered a background column. e.g. 0.5 for 50%
+/// * `min_frac` - Minimum fraction of spectra that must contain a hit in the column for it to be considered a background column. e.g. 0.5 for 50%
 pub fn prune_background_columns(
     bits_map: &mut HashMap<String, Vec<f32>>,
     min_frac: f64 // e.g. 0.5 for 50%
@@ -545,15 +540,14 @@ pub fn prune_background_columns(
     */
 }
 
-    /// Remove bins from sparse vectors if they appear in at least `min_frac * n_spec` spectra.
-    ///
-    /// This is useful for removing background noise from the similarity matrix.
-    ///
-    /// ### Arguments
-    ///
-    /// * `sparse_map` - Mutable map from scan ID to its sparse vector
-    /// * `min_frac` - Minimum fraction of spectra that must contain a hit in the bin
-    ///                for it to be considered a background bin. e.g. 0.5 for 50%
+/// Remove bins from sparse vectors if they appear in at least `min_frac * n_spec` spectra.
+///
+/// This is useful for removing background noise from the similarity matrix.
+///
+/// ### Arguments
+///
+/// * `sparse_map` - Mutable map from scan ID to its sparse vector
+/// * `min_frac` - Minimum fraction of spectra that must contain a hit in the bin for it to be considered a background bin. e.g. 0.5 for 50%
 pub fn prune_background_bins_sparse(
     sparse_map: &mut HashMap<String, SparseVec>,
     min_frac: f64,

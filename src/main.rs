@@ -12,7 +12,7 @@ pub use similarity::{compute_pairwise_similarity_matrix_sparse, prune_background
 fn main() {
 
     let art = " ____                  _             __  __             \n/ ___| _ __   ___  ___| |_ _ __ __ _|  \\/  | __ _ _ __  \n\\___ \\| '_ \\ / _ \\/ __| __| '__/ _` | |\\/| |/ _` | '_ \\ \n ___) | |_) |  __/ (__| |_| | | (_| | |  | | (_| | |_) |\n|____/| .__/ \\___|\\___|\\__|_|  \\__,_|_|  |_|\\__,_| .__/ \n      |_|                                        |_|    \n";
-    println!("{}", art);
+    println!("{art}");
 
     //First, give a welcome and description of what this command line interface does.
     println!("**Welcome to SpectraMap**
@@ -46,12 +46,12 @@ fn main() {
 
     // Print a final confirmation
     println!("----------------------------------------------------------------------------------------------");
-    println!("||    Input file: {}", input_path);
-    println!("||    Output file: {}", output_path);
-    println!("||    Similarity metric: {}", similarity_metric);
-    println!("||    MS1 Minimum intensity threshold: {:.2}", ms1_minimum_intensity);
-    println!("||    MS2 Minimum intensity threshold: {:.2}", ms2_minimum_intensity);
-    println!("||    Mass tolerance: {:.2}", mass_tolerance);
+    println!("||    Input file: {input_path}");
+    println!("||    Output file: {output_path}");
+    println!("||    Similarity metric: {similarity_metric}");
+    println!("||    MS1 Minimum intensity threshold: {ms1_minimum_intensity:.2}");
+    println!("||    MS2 Minimum intensity threshold: {ms2_minimum_intensity:.2}");
+    println!("||    Mass tolerance: {mass_tolerance:.2}");
     // println!("||    Maximum number of peaks: {}", max_peaks);
     // println!("||    Verbose flag: {}", verbose);
 
@@ -86,7 +86,7 @@ fn main() {
     let max_ms1_mz = ms1_spec_map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f32::max)).fold(0., f32::max);
     // Get vector length for binning
     let vector_length = (max_ms1_mz / mass_tolerance).ceil() as usize;
-    println!("Min m/z: 0.0, Max m/z: {}, Bin width: {:.2}, Vector Size: {}", max_ms1_mz, mass_tolerance, vector_length);
+    println!("Min m/z: 0.0, Max m/z: {max_ms1_mz}, Bin width: {mass_tolerance:.2}, Vector Size: {vector_length}");
 
     // Compute dense binary vectors
     println!("Computing MS1 dense binary vectors...");
@@ -124,19 +124,19 @@ fn main() {
     println!("Exporting similarity matricies...");
     let ms1_output_path = output_path.replace(".csv", "_ms1.csv");
     let ms2_output_path = output_path.replace(".csv", "_ms2.csv");
-    let _ = write_similarity_matrix(&ms1_scans, &ms1_mat, &ms1_output_path, output_format.clone());
-    let _ = write_similarity_matrix(&ms2_scans, &ms2_mat, &ms2_output_path, output_format.clone());
+    let _ = write_similarity_matrix(&ms1_scans, &ms1_mat, &ms1_output_path, output_format);
+    let _ = write_similarity_matrix(&ms2_scans, &ms2_mat, &ms2_output_path, output_format);
     println!("Exported MS1 similarity matrix successfully.");
 
-    println!("Success! File written to: {}", output_path);
+    println!("Success! File written to: {output_path}");
     let duration = start.elapsed();
-    println!("Time elapsed: {:.2?}", duration);
+    println!("Time elapsed: {duration:.2?}");
     process::exit(0);
 
 }
 
 fn detect_input_file_type(file_path: &str) -> Option<&str> {
-    match file_path.split('.').last() {
+    match file_path.split('.').next_back() {
         Some("mzML") | Some("mzml") => Some("mzML"),
         Some("mzXML") | Some("mzxml") => Some("mzXML"),
         _ => None,
@@ -144,7 +144,7 @@ fn detect_input_file_type(file_path: &str) -> Option<&str> {
 }
 
 fn detect_output_file_type(file_path: &str) -> Option<OutputFormat> {
-    match file_path.split('.').last() {
+    match file_path.split('.').next_back() {
         Some("") => Some(OutputFormat::Csv),
         Some("csv") => Some(OutputFormat::Csv),
         Some("tsv") => Some(OutputFormat::Tsv),
@@ -161,7 +161,7 @@ impl fmt::Display for OutputFormat {
             OutputFormat::Tsv => "tsv",
             OutputFormat::Json => "json",
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -198,8 +198,8 @@ fn prompt_input_path() -> String {
         if let Some(ft) = detect_input_file_type(trimmed) {
             // Clear the current prompt line and confirm selection
             print!("\r\x1B[K");
-            println!("||    File selected: {}", trimmed);
-            println!("||    File type detected: {}", ft);
+            println!("||    File selected: {trimmed}");
+            println!("||    File type detected: {ft}");
             return trimmed.to_string();
         } else {
             // Clear the prompt and show an error, then loop again
@@ -234,8 +234,8 @@ fn prompt_output_path() -> (String, OutputFormat) {
         if let Some(ft) = detect_output_file_type(trimmed) {
             // Clear the prompt line and confirm
             print!("\r\x1B[K");
-            println!("||    File selected: {}", trimmed);
-            println!("||    File type detected: {}", ft);
+            println!("||    File selected: {trimmed}");
+            println!("||    File type detected: {ft}");
             return (trimmed.to_string(), ft);
         } else {
             // Clear and show error, then loop again
@@ -267,7 +267,7 @@ fn prompt_similarity_metric() -> String {
         if let Some(m) = metric {
             // Erase the prompt line, then print the selected metric
             print!("\r\x1B[K");
-            println!("||    Similarity metric selected: {}", m);
+            println!("||    Similarity metric selected: {m}");
             return m.to_string();
         } else {
             // Erase the prompt line, then print an error
@@ -310,7 +310,7 @@ fn prompt_min_intensity(is_ms1: bool) -> f32 {
                 // Erase the prompt+input line
                 print!("\r\x1B[K");
                 // Print the selected value
-                println!("||    Minimum intensity threshold selected: {:.2}", min_intensity);
+                println!("||    Minimum intensity threshold selected: {min_intensity:.2}");
                 return min_intensity;
             }
             _ => {
@@ -352,7 +352,7 @@ fn prompt_mass_tolerance() -> f32 {
                 // Erase the prompt+input line
                 print!("\r\x1B[K");
                 // Print the selected value
-                println!("||    Mass tolerance selected: {:.2}", mass_tolerance);
+                println!("||    Mass tolerance selected: {mass_tolerance:.2}");
                 return mass_tolerance;
             }
             _ => {

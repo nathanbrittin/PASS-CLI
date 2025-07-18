@@ -5,7 +5,6 @@ use std::error::Error;
 use std::path::Path;
 use std::io::{Cursor, Read};
 use core::clone::Clone;
-use serde_json;
 use roxmltree::Document;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -136,11 +135,11 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 if is_mz {
                     mzs = decode_mz_array(blob, is_64bit, compressed);
                     // Convert to f32
-                    mzs = mzs.iter().map(|&x| x as f32).collect();
+                    mzs = mzs.iter().map(|&x| x).collect();
                 } else if is_int {
                     ints = decode_int_array(blob, is_64bit, compressed);
                     // Convert to f32
-                    ints = ints.iter().map(|&x| x as f32).collect();
+                    ints = ints.iter().map(|&x| x).collect();
                 }
             }
         }
@@ -284,7 +283,7 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 // row as f32 strings
                 for val in mat.index_axis(Axis(1), i) {
                     // Make the value only 4 digits after decimal point
-                    let val = format!("{:.4}", val);
+                    let val = format!("{val:.4}");
                     record.push(val.to_string());
                 }
                 wtr.write_record(&record)?;
