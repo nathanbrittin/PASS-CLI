@@ -11,11 +11,11 @@ pub use similarity::{compute_pairwise_similarity_matrix_sparse, prune_background
 
 fn main() {
 
-    let art = " ____                  _             __  __             \n/ ___| _ __   ___  ___| |_ _ __ __ _|  \\/  | __ _ _ __  \n\\___ \\| '_ \\ / _ \\/ __| __| '__/ _` | |\\/| |/ _` | '_ \\ \n ___) | |_) |  __/ (__| |_| | | (_| | |  | | (_| | |_) |\n|____/| .__/ \\___|\\___|\\__|_|  \\__,_|_|  |_|\\__,_| .__/ \n      |_|                                        |_|    \n";
+    let art = "  ____   _    ____ ____         ____ _     ___ \n |  _ \\ / \\  / ___/ ___|       / ___| |   |_ _|\n | |_) / _ \\ \\___ \\___ \\ _____| |   | |    | | \n |  __/ ___ \\ ___) |__) |_____| |___| |___ | | \n |_| /_/   \\_\\____/____/       \\____|_____|___|\n";
     println!("{art}");
 
     //First, give a welcome and description of what this command line interface does.
-    println!("**Welcome to SpectraMap**
+    println!("**Welcome to PASS-CLI (Pairwise Analyzer for Spectral Similarity)**
 ----------------------------------------------------------------------------------------------
 ||  -A Rust-powered CLI for mass spectrometry analysis.                                     
 ||  -Parsing `.mzML` files for spectral data                                                

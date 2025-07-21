@@ -1,8 +1,8 @@
-# SpectraMap-CLI
+# PASS-CLI
 
 <!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/ci.yml)](https://github.com/YourUser/SpectraMap-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/tests.yml?label=tests)](https://github.com/YourUser/SpectraMap-CLI/actions) -->
 
-SpectraMap-CLI is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats.
+PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats.
 
 ---
 
