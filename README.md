@@ -82,6 +82,7 @@ Precompiled executables are available on the [GitHub Releases page](https://gith
 ```sh
 tar -xzf pass-cli-vX.Y.Z-linux.tar.gz
 ./pass-cli
+```
 
 **Windows**
 1. Double-click "pass-cli.exe"
@@ -89,6 +90,7 @@ or
 2. Open Command Prompt or PowerShell, navigate to the directory, and run the executable. Example:
 ```sh
 .\pass-cli.exe
+```
 
 ## Usage
 
