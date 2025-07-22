@@ -114,8 +114,8 @@ You will be prompted to enter:
 2. **Output file path** (CSV, TSV, or JSON)
 3. **Similarity metric** (`cosine` or `modified-cosine`)
 4. **Minimum peak intensity** (e.g. `1000.0`)
-5. **Mass tolerance** in Da (for modified cosine, e.g. `0.02`)
-6. **Maximum number of spectra** (or leave blank to process all)
+5. **Noise Threshold** (eg. '1000.0')
+6. **Mass tolerance** in Da (for modified cosine, e.g. `0.02`)
 
 After entry, PASS‑CLI computes and saves the matrix.
 
@@ -134,8 +134,8 @@ pass-cli.exe
 # Output file path: examples/test_similarity.csv
 # Similarity metric: cosine
 # Minimum peak intensity: 1000.0
+# Noise Threshold: 1000.0
 # Mass tolerance: 0.02
-# Maximum number of spectra: [ENTER]
 ```
 
 Inspect `examples/test_similarity.csv`—it should look like:
@@ -165,7 +165,7 @@ The output file contains an N×N similarity matrix, where N is the number of spe
 * Standard vector cosine similarity with default peak m/z tolerance of `0.01` Da.
 * Good for overall spectral shape comparisons.
 
-### Modified Cosine Similarity
+### Modified Cosine Similarity (Future)
 
 * Compensates for mass shifts and neutral losses between MS/MS spectra.
 * Suitable for detecting related fragmentation patterns across different precursor masses.
@@ -181,7 +181,7 @@ The output file contains an N×N similarity matrix, where N is the number of spe
 ## Roadmap
 
 * [ ] Implement the modified cosine score for effective comaprison of MS2 spectra
-* [ ] Preprocessing filters (e.g., baseline subtraction, decharging)
+* [ ] Preprocessing filters (e.g., baseline subtraction, feature extraction)
 * [ ] Chromatogram overlay with similarity mapping
 * [ ] Export to network formats (e.g., GEXF, GraphML)
 * [ ] Output visualization scripts for heatmaps and network graphs

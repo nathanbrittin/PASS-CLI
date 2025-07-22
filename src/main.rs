@@ -68,6 +68,7 @@ fn main() {
     println!("||    Similarity metric: {similarity_metric}");
     println!("||    MS1 Minimum intensity threshold: {ms1_minimum_intensity:.2}");
     println!("||    MS2 Minimum intensity threshold: {ms2_minimum_intensity:.2}");
+    println!("||    Noise threshold: {noise_threshold:.2}");
     println!("||    Mass tolerance: {mass_tolerance:.2}");
     // println!("||    Maximum number of peaks: {}", max_peaks);
     // println!("||    Verbose flag: {}", verbose);
@@ -405,12 +406,12 @@ fn prompt_noise_threshold() -> u32 {
 
         // Parse
         match input_noise_thresh_str.parse::<u32>() {
-            Ok(noise_threshold) if max_peaks > 0 => {
+            Ok(noise_threshold) if noise_threshold > 0 => {
                 // Erase the prompt+input line
                 print!("\r\x1B[K");
                 // Print the selected value
-                println!("||    Noise threshold selected: {}", max_peaks);
-                return max_peaks;
+                println!("||    Noise threshold selected: {}", noise_threshold);
+                return noise_threshold;
             }
             _ => {
                 // Erase the prompt+input line
