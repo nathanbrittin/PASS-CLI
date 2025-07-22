@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/<your‑username>/<your‑repo>">
-    <img src="assets/pass-logo.png" alt="PASS logo" width="200" />
+    <img src="assets/pass-logo.png" alt="PASS logo" width="400" />
   </a>
 </p>
 
