@@ -1,6 +1,10 @@
 # PASS-CLI
 
-![PASS logo](assets/pass-logo.png)
+<p align="center">
+  <a href="https://github.com/<your‑username>/<your‑repo>">
+    <img src="assets/pass-logo.png" alt="PASS logo" width="200" />
+  </a>
+</p>
 
 <!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/{PASS}-CLI/ci.yml)](https://github.com/YourUser/PASS-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/PASS-CLI/tests.yml?label=tests)](https://github.com/YourUser/PASS-CLI/actions) -->
 
