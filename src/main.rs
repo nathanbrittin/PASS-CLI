@@ -5,9 +5,24 @@ use std::fmt; // Import fmt for Display implementation
 use std::io::{self, Write}; // Import io and Write traits for flushing output
 use std::time::Instant;
 mod ms_io;
-pub use ms_io::{import_mzml, OutputFormat, write_similarity_matrix, filter_by_ms_level};
+pub use ms_io::{
+    import_mzml,
+    OutputFormat, 
+    write_similarity_matrix, 
+    filter_by_ms_level
+};
 mod similarity;
-pub use similarity::{compute_pairwise_similarity_matrix_sparse, prune_background_columns, prune_background_bins_sparse, prune_unused_bins, spectrum_to_dense_vec, compute_sparse_vec_map, compute_dense_vec_map, cosine_similarity, compute_pairwise_similarity_matrix_ndarray};
+pub use similarity::{
+    compute_pairwise_similarity_matrix_sparse, 
+    prune_background_columns, 
+    prune_background_bins_sparse, 
+    prune_unused_bins, 
+    spectrum_to_dense_vec, 
+    compute_sparse_vec_map, 
+    compute_dense_vec_map, 
+    cosine_similarity, 
+    compute_pairwise_similarity_matrix_ndarray
+};
 
 fn main() {
 
@@ -37,6 +52,8 @@ fn main() {
     let ms1_minimum_intensity = prompt_min_intensity(true);
 
     let ms2_minimum_intensity = prompt_min_intensity(false);
+
+    let noise_threshold = prompt_noise_threshold();
 
     // let max_peaks = prompt_max_peaks();
 
@@ -89,19 +106,17 @@ fn main() {
     println!("Min m/z: 0.0, Max m/z: {max_ms1_mz}, Bin width: {mass_tolerance:.2}, Vector Size: {vector_length}");
 
     // Compute dense binary vectors
-    println!("Computing MS1 dense binary vectors...");
-    // let mut ms1_bits_map = compute_dense_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, ms1_minimum_intensity);
+    println!("Computing MS1 spare binary vectors...");
     let mut ms1_bits_map = compute_sparse_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, ms1_minimum_intensity);
-    println!("Computing MS2 dense binary vectors...");
-    // let mut ms2_bits_map = compute_dense_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, ms2_minimum_intensity);
+    println!("Computing MS2 spare binary vectors...");
     let mut ms2_bits_map = compute_sparse_vec_map(&ms2_spec_map, mass_tolerance, max_ms1_mz, ms2_minimum_intensity);
     println!("Computed dense binary vectors successfully.");
 
     // Filter background signals
-    println!("Pruning background columns...");
+    println!("Pruning background signals...");
     prune_background_bins_sparse(&mut ms1_bits_map, 0.5);
     prune_background_bins_sparse(&mut ms2_bits_map, 0.5);
-    println!("Pruned background columns successfully.");
+    println!("Pruned background signals successfully.");
 
     // // Print vector size
     // println!("Vector size: {}", ms1_bits_map.values().next().unwrap().len());
@@ -366,47 +381,47 @@ fn prompt_mass_tolerance() -> f32 {
     }
 }
 
-// fn prompt_max_peaks() -> u32 {
-//     loop {
-//         println!("----------------------------------------------------------------------------------------------");
-//         // Prompt for maximum number of peaks
-//         print!("||    Please enter the desired maximum number of peaks (default: 1000): ");
-//         let mut max_peaks_input = String::new();
-//         io::stdout().flush().unwrap();
+fn prompt_noise_threshold() -> u32 {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        // Prompt for the intensity of the noise threshold
+        print!("||    Please enter the desired intensity of the noise threshold (default: 100): ");
+        let mut noise_thresh_input = String::new();
+        io::stdout().flush().unwrap();
 
-//         // Read into our buffer
-//         max_peaks_input.clear();
-//         io::stdin()
-//             .read_line(&mut max_peaks_input)
-//             .expect("Failed to read maximum number of peaks.");
+        // Read into our buffer
+        noise_thresh_input.clear();
+        io::stdin()
+            .read_line(&mut noise_thresh_input)
+            .expect("Failed to read noise threshold.");
 
-//         // Trim & apply default
-//         let trimmed_max_peaks = max_peaks_input.trim();
-//         let input_max_peaks_str = if trimmed_max_peaks.is_empty() {
-//             "1000"
-//         } else {
-//             trimmed_max_peaks
-//         };
+        // Trim & apply default
+        let trimmed_noise_thresh = noise_thresh_input.trim();
+        let input_noise_thresh_str = if trimmed_noise_thresh.is_empty() {
+            "100"
+        } else {
+            trimmed_noise_thresh
+        };
 
-//         // Parse
-//         match input_max_peaks_str.parse::<u32>() {
-//             Ok(max_peaks) if max_peaks > 0 => {
-//                 // Erase the prompt+input line
-//                 print!("\r\x1B[K");
-//                 // Print the selected value
-//                 println!("||    Maximum number of peaks selected: {}", max_peaks);
-//                 return max_peaks;
-//             }
-//             _ => {
-//                 // Erase the prompt+input line
-//                 print!("\r\x1B[K");
-//                 // Print error
-//                 println!("||    !!! Invalid number. Please enter a positive integer. !!!");
-//                 // loop back
-//             }
-//         }
-//     }
-// }
+        // Parse
+        match input_noise_thresh_str.parse::<u32>() {
+            Ok(noise_threshold) if max_peaks > 0 => {
+                // Erase the prompt+input line
+                print!("\r\x1B[K");
+                // Print the selected value
+                println!("||    Noise threshold selected: {}", max_peaks);
+                return max_peaks;
+            }
+            _ => {
+                // Erase the prompt+input line
+                print!("\r\x1B[K");
+                // Print error
+                println!("||    !!! Invalid number. Please enter a positive integer. !!!");
+                // loop back
+            }
+        }
+    }
+}
 
 // fn prompt_verbose() -> bool {
 //     loop {

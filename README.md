@@ -1,6 +1,8 @@
 # PASS-CLI
 
-<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/ci.yml)](https://github.com/YourUser/SpectraMap-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/SpectraMap-CLI/tests.yml?label=tests)](https://github.com/YourUser/SpectraMap-CLI/actions) -->
+![PASS logo](assets/pass-logo.png)
+
+<!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/{PASS}-CLI/ci.yml)](https://github.com/YourUser/PASS-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/PASS-CLI/tests.yml?label=tests)](https://github.com/YourUser/PASS-CLI/actions) -->
 
 PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats.
 
@@ -48,8 +50,8 @@ Clone the repository and compile:
 
 ```bash
 # Clone the project
-git clone https://github.com/YourUser/SpectraMap-CLI.git
-cd SpectraMap-CLI
+git clone https://github.com/nathanbrittin/PASS-CLI.git
+cd PASS-CLI
 
 # Build in release mode
 cargo build --release
@@ -57,15 +59,15 @@ cargo build --release
 
 The resulting executable is:
 
-* `target/release/spectramap-cli` (Unix)
-* `target\release\spectramap-cli.exe` (Windows)
+* `target/release/pass-cli` (Unix)
+* `target\release\pass-cli.exe` (Windows)
 
 ## Releases & Precompiled Binaries
 
-We publish precompiled executables on the [GitHub Releases page](https://github.com/YourUser/SpectraMap-CLI/releases). Each release includes:
+We publish precompiled executables on the [GitHub Releases page](https://github.com/nathanbrittin/PASS-CLI/releases). Each release includes:
 
-* **Unix binaries** (`spectramap-cli` for Linux/macOS)
-* **Windows binaries** (`spectramap-cli.exe`)
+* **Unix binaries** (`pass-cli` for Linux/macOS)
+* **Windows binaries** (`pass-cli.exe`)
 * Checksums (`.sha256`) for integrity verification
 
 **To install from a release**:
@@ -77,24 +79,24 @@ We publish precompiled executables on the [GitHub Releases page](https://github.
 **Linux/Unix**
    ```bash
    # Example on Linux
-   tar -xzf spectramap-cli-v1.2.3-linux.tar.gz
-   ./spectramap-cli
+   tar -xzf pass-cli-v1.2.3-linux.tar.gz
+   ./pass-cli
    ```
 
 ## Usage
 
-SpectraMap-CLI features an interactive, prompt-driven workflow to simplify operation for users who may be unfamiliar with complex command-line flags or syntax. On launch, the tool will guide you through each configuration step—there’s no need to remember options or refer back to documentation mid-run.
+PASS-CLI features an interactive, prompt-driven workflow to simplify operation for users who may be unfamiliar with complex command-line flags or syntax. On launch, the tool will guide you through each configuration step—there’s no need to remember options or refer back to documentation mid-run.
 
 To get started, just execute the program:
 
 ```bash
 # Unix
-./target/release/spectramap-cli
+./target/release/pass-cli
 
 # Windows
-.\\target\\release\\spectramap-cli.exe
+.\\target\\release\\pass-cli.exe
 #or move the file to your directory
-spectramap-cli.exe
+pass-cli.exe
 ```
 
 You will be prompted to enter:
@@ -106,7 +108,7 @@ You will be prompted to enter:
 5. **Mass tolerance** in Da (for modified cosine, e.g. `0.02`)
 6. **Maximum number of spectra** (or leave blank to process all)
 
-After entry, SpectraMap‑CLI computes and saves the matrix.
+After entry, PASS‑CLI computes and saves the matrix.
 
 ## Quick Start Example
 
@@ -114,9 +116,9 @@ Assuming you have a small test file at `examples/test_run.mzML`:
 
 ```bash
 # Run the tool
-./target/release/spectramap-cli
+./target/release/pass-cli
 # or
-spectramap-cli.exe
+pass-cli.exe
 
 # Enter when prompted:
 # Input file path: examples/test_run.mzML
@@ -187,7 +189,7 @@ Integration tests live in `tests/`, using sample data in `examples/`. CI runs th
 
 ## Contact & Support
 
-* **GitHub Issues:** [https://github.com/YourUser/SpectraMap-CLI/issues](https://github.com/YourUser/SpectraMap-CLI/issues)
+* **GitHub Issues:** [https://github.com/YourUser/PASS-CLI/issues](https://github.com/YourUser/PASS-CLI/issues)
 * **Email:** Nathan Brittin [nathan.brittin@wisc.edu](mailto:nathan.brittin@wisc.edu)
 
 ## Contributing

@@ -1,8 +1,5 @@
-1. Figure out if the MS2 spectra are being filtered correctly.
-   - Ensure that the MS2 spectra are being filtered based on the precursor m/z values and that they are not empty.
+1. Implement the modified cosine similarity function that considers the difference in selected precursor m/z values for MS2 spectra.
 
-2. Implement the modified cosine similarity function that considers the difference in selected precursor m/z values for MS2 spectra.
-
-3. Make figures of heatmap
+2. Make figures of heatmap
    - Use a library like `plotters` or `ndarray` to visualize the similarity matrix as a heatmap.
    - Ensure the heatmap is color-coded based on similarity scores.
