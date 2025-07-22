@@ -56,14 +56,24 @@ Clone the repository and compile:
 # Clone the project
 git clone https://github.com/nathanbrittin/PASS-CLI.git
 cd PASS-CLI
+```
 
-# Build in release mode
+Compile either directly using cargo or using the build-all.sh bash script for automatically building binaries for all OS.
+
+```
+# Build in cargo release mode
 cargo build --release
+```
+
+or execute build-all.sh in Unix or WSL command line.
+
+```
+.\build-all.sh
 ```
 
 The resulting executable is:
 
-* `target/release/pass-cli` (Unix)
+* `target/release/pass-cli` (Unix/Linux/macOS)
 * `target\release\pass-cli.exe` (Windows)
 
 ## Releases & Precompiled Binaries
@@ -180,11 +190,13 @@ The output file contains an N×N similarity matrix, where N is the number of spe
 
 ## Roadmap
 
+* [ ] Fix error handling of files not containing MS2 data
 * [ ] Implement the modified cosine score for effective comaprison of MS2 spectra
 * [ ] Preprocessing filters (e.g., baseline subtraction, feature extraction)
 * [ ] Chromatogram overlay with similarity mapping
 * [ ] Export to network formats (e.g., GEXF, GraphML)
 * [ ] Output visualization scripts for heatmaps and network graphs
+* [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS
 
 ## Tests
 

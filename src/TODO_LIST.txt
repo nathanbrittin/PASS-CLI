@@ -1,5 +1,0 @@
-1. Implement the modified cosine similarity function that considers the difference in selected precursor m/z values for MS2 spectra.
-
-2. Make figures of heatmap
-   - Use a library like `plotters` or `ndarray` to visualize the similarity matrix as a heatmap.
-   - Ensure the heatmap is color-coded based on similarity scores.

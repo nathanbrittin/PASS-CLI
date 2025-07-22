@@ -1,4 +1,5 @@
-// use std::collections::HashMap;
+use std::collections::HashMap;
+use ndarray::Array2;
 use std::process;
 use std::fmt; // Import fmt for Display implementation
 // use std::path::Path;
@@ -47,7 +48,9 @@ fn main() {
 
     let (output_path, output_format) = prompt_output_path();
 
-    let similarity_metric = prompt_similarity_metric();
+    let ms1_similarity_metrics = prompt_similarity_metrics(1.0);
+
+    let ms2_similarity_metrics = prompt_similarity_metrics(2.0);
 
     let ms1_minimum_intensity = prompt_min_intensity(true);
 
@@ -55,17 +58,15 @@ fn main() {
 
     let noise_threshold = prompt_noise_threshold();
 
-    // let max_peaks = prompt_max_peaks();
-
     let mass_tolerance = prompt_mass_tolerance();
-
-    // let verbose = prompt_verbose();
 
     // Print a final confirmation
     println!("----------------------------------------------------------------------------------------------");
     println!("||    Input file: {input_path}");
     println!("||    Output file: {output_path}");
-    println!("||    Similarity metric: {similarity_metric}");
+    println!("||    Output format: {output_format}");
+    println!("||    MS1 Similarity metrics: {:?}", ms1_similarity_metrics);
+    println!("||    MS2 Similarity metrics: {:?}", ms2_similarity_metrics);
     println!("||    MS1 Minimum intensity threshold: {ms1_minimum_intensity:.2}");
     println!("||    MS2 Minimum intensity threshold: {ms2_minimum_intensity:.2}");
     println!("||    Noise threshold: {noise_threshold:.2}");
@@ -119,30 +120,48 @@ fn main() {
     prune_background_bins_sparse(&mut ms2_bits_map, 0.5);
     println!("Pruned background signals successfully.");
 
-    // // Print vector size
-    // println!("Vector size: {}", ms1_bits_map.values().next().unwrap().len());
-
-    // // Prune bits_map
-    // println!("Pruning unused bins...");
-    // let ms1_bits_map = prune_unused_bins(&ms1_bits_map);
-    // let ms2_bits_map = prune_unused_bins(&ms2_bits_map);
-    // println!("Pruned vector size: {}", ms1_bits_map.values().next().unwrap().len());  
-
     // Compute pairwise cosine similarities
-    println!("Computing MS1 pairwise similarity matrix...");
-    // let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_ndarray(&ms1_bits_map);
-    let (ms1_scans, ms1_mat) = compute_pairwise_similarity_matrix_sparse(&ms1_bits_map);
-    println!("Computing MS2 pairwise similarity matrix...");
-    // let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_ndarray(&ms2_bits_map);
-    let (ms2_scans, ms2_mat) = compute_pairwise_similarity_matrix_sparse(&ms2_bits_map);
-    println!("Computed pairwise similarity matrix successfully.");
+    let mut ms1_results: HashMap<String, (Vec<String>, Array2<f32>)> = HashMap::new();
+    let mut ms2_results: HashMap<String, (Vec<String>, Array2<f32>)> = HashMap::new();
 
-    println!("Exporting similarity matricies...");
-    let ms1_output_path = output_path.replace(".csv", "_ms1.csv");
-    let ms2_output_path = output_path.replace(".csv", "_ms2.csv");
-    let _ = write_similarity_matrix(&ms1_scans, &ms1_mat, &ms1_output_path, output_format);
-    let _ = write_similarity_matrix(&ms2_scans, &ms2_mat, &ms2_output_path, output_format);
-    println!("Exported MS1 similarity matrix successfully.");
+    for metric in &ms1_similarity_metrics {
+        println!("Computing MS1 pairwise similarity matrix using {metric}...");
+        let (ms1_scans, ms1_mat) = match *metric {
+            "cosine" => compute_pairwise_similarity_matrix_sparse(&ms1_bits_map, &spec_metadata, metric.to_string(), 1, mass_tolerance),
+            _ => {
+                println!("Unsupported similarity metric: {metric}");
+                continue;
+            }
+        };
+        ms1_results.insert(metric.to_string(), (ms1_scans, ms1_mat));
+    }
+
+    for metric in &ms2_similarity_metrics {
+        println!("Computing MS2 pairwise similarity matrix using {metric}...");
+        let (ms2_scans, ms2_mat) = match *metric {
+            "cosine" => compute_pairwise_similarity_matrix_sparse(&ms2_bits_map, &spec_metadata, metric.to_string(), 2, mass_tolerance),
+            "modified-cosine" => compute_pairwise_similarity_matrix_sparse(&ms2_bits_map, &spec_metadata, metric.to_string(), 2, mass_tolerance),
+            _ => {
+                println!("Unsupported similarity metric: {metric}");
+                continue;
+            }
+        };
+        ms2_results.insert(metric.to_string(), (ms2_scans, ms2_mat));
+    }
+
+    println!("Exporting similarity matrices...");
+
+    for (metric, (ms1_scans, ms1_mat)) in &ms1_results {
+        let ms1_output_path = output_path.replace(".csv", &format!("_ms1_{metric}.csv"));
+        let _ = write_similarity_matrix(ms1_scans, ms1_mat, &ms1_output_path, output_format);
+        println!("Exported MS1 matrix for {metric}");
+    }
+
+    for (metric, (ms2_scans, ms2_mat)) in &ms2_results {
+        let ms2_output_path = output_path.replace(".csv", &format!("_ms2_{metric}.csv"));
+        let _ = write_similarity_matrix(ms2_scans, ms2_mat, &ms2_output_path, output_format);
+        println!("Exported MS2 matrix for {metric}");
+    }
 
     println!("Success! File written to: {output_path}");
     let duration = start.elapsed();
@@ -181,13 +200,26 @@ impl fmt::Display for OutputFormat {
     }
 }
 
-fn detect_similarity_metric(similarity_metric: &str) -> Option<&str> {
-    // If blank, default to cosine
-    match similarity_metric {
-        "" => Some("cosine"),
-        "cosine" => Some("cosine"),
-        "modified-cosine" => Some("modified-cosine"),
-        _ => None,
+fn detect_similarity_metrics(input: &str) -> Option<Vec<&'static str>> {
+    if input.is_empty() {
+        return Some(vec!["cosine"]);  // Default case
+    }
+    
+    let mut metrics = Vec::new();
+    let inputs: Vec<&str> = input.split(',').map(|s| s.trim()).collect();
+    
+    for metric in inputs {
+        match metric {
+            "cosine" => metrics.push("cosine"),
+            "modified-cosine" => metrics.push("modified-cosine"),
+            _ => return None,  // Invalid metric found
+        }
+    }
+    
+    if metrics.is_empty() {
+        None
+    } else {
+        Some(metrics)
     }
 }
 
@@ -261,37 +293,53 @@ fn prompt_output_path() -> (String, OutputFormat) {
     }
 }
 
-fn prompt_similarity_metric() -> String {
+fn prompt_similarity_metrics(ms_level: f32) -> Vec<&'static str> {
+    const DIVIDER: &str = "----------------------------------------------------------------------------------------------";
+    const PROMPT_MS1: &str = "||    Please enter the desired MS1 similarity metric(s) [cosine(default)]: ";
+    const PROMPT_MS2: &str = "||    Please enter the desired MS2 similarity metric(s) [cosine(default), modified-cosine]: ";
+    
     loop {
-        // Print the divider and context lines
-        println!("----------------------------------------------------------------------------------------------");
-        // Use `print!` for the input prompt, then flush so it appears immediately
-        print!("||    Please enter the desired similarity metric [cosine(default) or modified-cosine]: ");
-        let mut similarity_metric = String::new();
+        println!("{}", DIVIDER);
+        let prompt = if ms_level == 1.0 { PROMPT_MS1 } else { PROMPT_MS2 };
+        print!("{prompt}");
         io::stdout().flush().unwrap();
 
-        // Clear buffer and read the user’s response
-        similarity_metric.clear();
-        io::stdin()
-            .read_line(&mut similarity_metric)
-            .expect("Failed to read similarity metric.");
-
-        // Trim and detect
-        let metric_input = similarity_metric.trim();
-        let metric = detect_similarity_metric(metric_input);
-
-        if let Some(m) = metric {
-            // Erase the prompt line, then print the selected metric
-            print!("\r\x1B[K");
-            println!("||    Similarity metric selected: {m}");
-            return m.to_string();
-        } else {
-            // Erase the prompt line, then print an error
-            print!("\r\x1B[K");
-            println!("||    !!! Similarity metric not detected. Please verify your input. !!!");
-            // loop back to re-prompt
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                let trimmed_input = input.trim();
+                
+                match detect_similarity_metrics(trimmed_input) {
+                    // If the ms_level is 1, do not allow modified-cosine
+                    Some(metrics) if ms_level == 1.0 && metrics.contains(&"modified-cosine") => {
+                        clear_current_line();
+                        println!("||    !!! modified-cosine is not allowed for MS1. Please verify your input. !!!");
+                    }
+                    Some(metrics) => {
+                        clear_current_line();
+                        if ms_level == 1.0 {
+                            println!("||    MS1 Similarity metric(s) selected: {:?}", metrics);
+                        } else {
+                            println!("||    MS2 Similarity metric(s) selected: {:?}", metrics);
+                        }
+                        return metrics;
+                    }
+                    None => {
+                        clear_current_line();
+                        println!("||    !!! Similarity metric(s) not detected. Please verify your input. !!!");
+                    }
+                }
+            }
+            Err(error) => {
+                clear_current_line();
+                println!("||    !!! Error reading input: {} !!!", error);
+            }
         }
     }
+}
+
+fn clear_current_line() {
+    print!("\r\x1B[K");
 }
 
 fn prompt_min_intensity(is_ms1: bool) -> f32 {

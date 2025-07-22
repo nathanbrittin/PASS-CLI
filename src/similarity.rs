@@ -1,14 +1,11 @@
 use std::collections::{HashMap,HashSet};
 // use std::error::Error;
 use ndarray::{Array2};
-use crate::ms_io::Peak;
+use crate::ms_io::{Peak, SpectrumMetadata};
 use rayon::prelude::*;
 use std::time::Instant;
 use std::sync::Arc;
-
 type SparseVec = Vec<(usize, f32)>;
-
-
 
 /// Converts a spectrum from a sparse representation of peaks to a sparse representation as a vector.
 ///
@@ -297,27 +294,40 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     (scans, mat)
 }
 
-    /// Computes a pairwise similarity matrix for sparse vectors based on their cosine similarity.
-    ///
-    /// This function takes a map from scan IDs to their sparse vector representations,
-    /// computes the cosine similarity between each pair of vectors, and returns both
-    /// the ordered list of scan IDs and the resulting similarity matrix. The matrix
-    /// is symmetric, with diagonal elements set to 1.0 (indicating identical vectors).
-    ///
-    /// ### Arguments
-    ///
-    /// * `sparse_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding sparse vector representations.
-    ///
-    /// ### Returns
-    ///
-    /// A tuple containing:
-    /// - A `Vec<String>` of scan IDs in the order they appear in the matrix.
-    /// - An `Array2<f32>` representing the pairwise similarity matrix, where each
-    ///   cell contains the cosine similarity score between the corresponding vectors.
+
+/// Computes a pairwise similarity matrix for spectra based on their sparse vector representations.
+///
+/// This function takes a map from scan IDs to their sparse vector representations,
+/// computes the cosine similarity between each pair of spectra, and returns both the ordered list of scan IDs and the resulting similarity matrix.
+/// The matrix is symmetric, with diagonal elements set to 1.0 (indicating identical spectra).
+///
+/// If the `modified_cosine` metric is used, the function will shift the sparse vectors to account for mass shifts and neutral losses between MS/MS spectra.
+/// In this case, the `mass_tolerance` parameter specifies the mass tolerance for the shift in units of Da.
+///
+/// ### Arguments
+///
+/// * `sparse_map` - A reference to a HashMap where keys are scan IDs and values are their corresponding sparse vector representations.
+/// * `spec_metadata` - A reference to a HashMap where keys are scan IDs and values are their corresponding SpectrumMetadata objects.
+/// * `similarity_metric` - A string specifying the similarity metric to use. Options are "cosine" and "modified_cosine".
+/// * `ms_level` - An integer specifying the MS level of the spectra.
+/// * `mass_tolerance` - A float specifying the mass tolerance for the shift in units of Da. Only used if `similarity_metric` is "modified_cosine".
+///
+/// ### Returns
+///
+/// A tuple containing:
+/// - A `Vec<String>` of scan IDs in the order they appear in the matrix.
+/// - An `Array2<f32>` representing the pairwise similarity matrix, where each cell contains the cosine similarity score between the corresponding spectra.
 pub fn compute_pairwise_similarity_matrix_sparse(
     sparse_map: &HashMap<String, SparseVec>,
+    spec_metadata: &HashMap<String, SpectrumMetadata>,
+    similarity_metric: String,
+    ms_level: u8,
+    mass_tolerance: f32,
 ) -> (Vec<String>, Array2<f32>) {
-    // 1) Sort scan IDs numerically
+    if similarity_metric == "modified_cosine" && ms_level == 1 {
+        panic!("The modified cosine similarity metric can only be used with MS2 data.");
+    }
+
     let start = Instant::now();
     let mut scans: Vec<String> = sparse_map.keys().cloned().collect();
     scans.sort_by(|a, b| {
@@ -328,30 +338,55 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     });
     println!("Sorted scan IDs in {:.2?}", start.elapsed());
 
-    // 2) Cache &Arc the slices for thread-safe sharing
     let start = Instant::now();
-    let spectra: Arc<Vec<&SparseVec>> =
-        Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
+    let spectra: Arc<Vec<&SparseVec>> = Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
     println!("Cached scan IDs in {:.2?}", start.elapsed());
 
-    // 3) Parallel upper-triangle
     let start = Instant::now();
-    let entries: Vec<(usize, usize, f32)> = (0..n)
-        .into_par_iter()
-        .flat_map(|i| {
-            let spectra = Arc::clone(&spectra);
-            // Inner loop is now sequential
-            (i + 1..n).into_par_iter().map(move |j| {
-                let sim = cosine_similarity_sparse(spectra[i], spectra[j]);
-                (i, j, sim)
-            })
-        })
-        .collect();
-    println!("Computed cosine similarities in {:.2?}", start.elapsed());
+    let scans_clone = scans.clone();
+    let entries: Vec<(usize, usize, f32)> = {
+        let metric = similarity_metric.clone(); // ✅ fix here
+        (0..n)
+            .into_par_iter()
+            .flat_map(move |i| {
+                let spectra = Arc::clone(&spectra);
+                let scans = scans_clone.clone();
+                let spec_metadata = spec_metadata.clone();
+                let metric = metric.clone(); // 💡 each closure gets its own copy
 
-    // 4) Fill diagonal + symmetrize
+                let a_id = scans[i].clone();
+                let a = spectra[i];
+
+                (i + 1..n).into_par_iter().map(move |j| {
+                    let b_id = scans[j].clone();
+                    let b = spectra[j];
+
+                    let sim = if metric == "modified_cosine" {
+                        let a_meta = spec_metadata.get(&a_id).unwrap();
+                        let b_meta = spec_metadata.get(&b_id).unwrap();
+                        let delta_mz = b_meta.target_mz - a_meta.target_mz;
+                        let shift_bins = (delta_mz / mass_tolerance).round() as isize;
+
+                        let b_shifted = shift_sparse_vec(b, -shift_bins);
+                        let sim1 = cosine_similarity_sparse(a, &b_shifted);
+
+                        let a_shifted = shift_sparse_vec(a, shift_bins);
+                        let sim2 = cosine_similarity_sparse(&a_shifted, b);
+
+                        sim1.max(sim2)
+                    } else {
+                        cosine_similarity_sparse(a, b)
+                    };
+
+                    (i, j, sim)
+                })
+            })
+            .collect()
+    };
+    println!("Computed {} similarities in {:.2?}", entries.len(), start.elapsed());
+
     let start = Instant::now();
     for i in 0..n {
         mat[(i, i)] = 1.0;
@@ -363,6 +398,30 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     println!("Filled matrix in {:.2?}", start.elapsed());
 
     (scans, mat)
+}
+
+/// Shifts a sparse vector by a given number of bins, wrapping around to 0
+/// if the resulting index is negative.
+///
+/// # Arguments
+///
+/// * `vec` - The sparse vector to shift.
+/// * `shift_bins` - The number of bins to shift the vector by.
+///
+/// # Returns
+///
+/// A new sparse vector with the shifted indices.
+fn shift_sparse_vec(vec: &SparseVec, shift_bins: isize) -> SparseVec {
+    vec.iter()
+        .filter_map(|(bin, intensity)| {
+            let shifted = *bin as isize + shift_bins;
+            if shifted >= 0 {
+                Some((shifted as usize, *intensity))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Computes a map from scan IDs to sparse vector representations of their peaks.
@@ -622,8 +681,9 @@ mod tests {
 
         // 3) Convert to sparse & compute
         let sparse_map = dense_to_sparse(&bits_map);
+        let dummy_metadata: HashMap<String, SpectrumMetadata> = HashMap::new();
         let (sparse_scans, sparse_mat) =
-            compute_pairwise_similarity_matrix_sparse(&sparse_map);
+            compute_pairwise_similarity_matrix_sparse(&sparse_map, &dummy_metadata, "cosine".to_string(), 1, 1.0);
 
         // 4) Verify same ordering and dimensions
         assert_eq!(dense_scans, sparse_scans);
