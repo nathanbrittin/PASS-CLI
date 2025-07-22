@@ -43,7 +43,7 @@ PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, 
 * **Flexible filtering**: Discard low‑intensity peaks and limit the number of spectra for rapid prototyping.
 * **Output formats**: Export a full similarity matrix as `CSV`, `TSV`, or `JSON`.
 
-## Prerequisites
+## Prerequisites for Developers
 
 * Rust (1.60 or later) and `cargo`
 * Operating systems: Windows, macOS, Linux
@@ -68,24 +68,27 @@ The resulting executable is:
 
 ## Releases & Precompiled Binaries
 
-We publish precompiled executables on the [GitHub Releases page](https://github.com/nathanbrittin/PASS-CLI/releases). Each release includes:
+Precompiled executables are available on the [GitHub Releases page](https://github.com/nathanbrittin/PASS-CLI/releases) for major platforms:
 
-* **Unix binaries** (`pass-cli` for Linux/macOS)
-* **Windows binaries** (`pass-cli.exe`)
-* Checksums (`.sha256`) for integrity verification
+- **Linux/macOS**: `pass-cli`
+- **Windows**: `pass-cli.exe`
 
-**To install from a release**:
+### Installation from a Release
 
-1. Download the appropriate archive (`.tar.gz` or `.zip`) from the latest release.
+1. Download the appropriate `.tar.gz` (Linux/macOS) or `.zip` (Windows) file from the [latest release](https://github.com/nathanbrittin/PASS-CLI/releases).
+2. Extract the archive and run the executable:
 
-2. Extract and place the binary in your `PATH`, or run directly:
+**Linux/macOS**
+```sh
+tar -xzf pass-cli-vX.Y.Z-linux.tar.gz
+./pass-cli
 
-**Linux/Unix**
-   ```bash
-   # Example on Linux
-   tar -xzf pass-cli-v1.2.3-linux.tar.gz
-   ./pass-cli
-   ```
+**Windows**
+1. Double-click "pass-cli.exe"
+or
+2. Open Command Prompt or PowerShell, navigate to the directory, and run the executable. Example:
+```sh
+.\pass-cli.exe
 
 ## Usage
 
