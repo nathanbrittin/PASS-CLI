@@ -194,12 +194,12 @@ Run unit and integration tests:
 cargo test -- --nocapture
 ```
 
-Integration tests live in `tests/`, using sample data in `examples/`. CI runs these on each push.
+Integration tests live in `tests/`, using sample data in `tests/data`. CI runs these on each push.
 
 ## Contact & Support
 
-* **GitHub Issues:** [https://github.com/YourUser/PASS-CLI/issues](https://github.com/YourUser/PASS-CLI/issues)
-* **Email:** Nathan Brittin [nathan.brittin@wisc.edu](mailto:nathan.brittin@wisc.edu)
+* **GitHub Issues:** [https://github.com/nathanbrittin/PASS-CLI/issues](https://github.com/nathanbrittin/PASS-CLI/issues)
+* **Email:** Nathan Brittin [nathanbrittin@gmail.com](mailto:nathanbrittin@gmail.com)
 
 ## Contributing
 
