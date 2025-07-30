@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::fs;
-use std::collections::HashMap;
+// use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::error::Error;
 use std::path::Path;
 use std::io::{Cursor, Read};
@@ -337,11 +338,13 @@ pub fn filter_by_ms_level(map: HashMap<String, Vec<Peak>>, map_metadata: HashMap
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    // use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::path::Path;
 
     #[test]
     fn test_import_on_samples() {
+        println!("\n=== TESTING IMPORT ON SAMPLES ===");
         // Map of pyOpenMS sample file names to expected spectrum counts
         let mut file_num_spectra_map: HashMap<&str, usize> = HashMap::new();
         let data_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("data");
@@ -362,22 +365,22 @@ mod tests {
         for (fname, &expected_count) in &file_num_spectra_map {
             let path = data_dir.join(fname);
             let path_str = path.to_str().expect("Invalid path");
-            println!("----------------------------------------------------------------------------------");
-            println!("Testing file: {}", path_str);
+            println!("----------------------------------------------------");
+            println!("-- Testing file: {}", path_str);
 
             // Verify that the file exists and is readable
-            assert!(Path::new(path_str).exists(), "File {} does not exist", fname);
+            assert!(Path::new(path_str).exists(), "-- File {} does not exist", fname);
 
             // Use the public API import_mzml_to_map
             let result = import_mzml(path_str);
-            assert!(result.is_ok(), "Failed to import {}", fname);
+            assert!(result.is_ok(), "-- Failed to import {}", fname);
             let (map, _) = result.unwrap();
 
             // Ensure the number of spectra matches the expected count
             let num_spectra = map.len();
-            assert_eq!(num_spectra, expected_count, "Incorrect number of spectra in {}", fname);
+            assert_eq!(num_spectra, expected_count, "-- Incorrect number of spectra in {}", fname);
 
-            println!("File {} has {} spectra", fname, map.len());
+            println!("-- File {} has {} spectra", fname, map.len());
 
             // Print a summary of the first spectra (scan number, mzs, ints)
             let (scan, peak) = map.iter().next().unwrap();
@@ -385,7 +388,7 @@ mod tests {
             let mz = peak[0].mz;
             let int = peak[0].intensity;
             println!(
-                "First spectrum: scan {}, ex. m/z: {}, int: {}",
+                "-- First spectrum: scan {}, ex. m/z: {}, int: {}",
                 scan, mz, int
             );
         }
@@ -393,6 +396,7 @@ mod tests {
 
     #[test]
     fn test_decoding() {
+        println!("\n=== TESTING DECODING ===");
         let mut binary_map = HashMap::new();
         // Add binary sequences to map
         binary_map.insert("example_1", "AAAAYP4ZhEAAAAAgPyKEQAAAAKAIKoRAAAAAQDkuhEAAAADATzKEQAAAAOAINoRAAAAAwNw5hEAAAAAAKEKEQAAAAKBWSoRAAAAAYBdahEAAAABgKWKEQAAAACAAaoRAAAAAYBZyhEAAAACADXaEQAAAAMAKeoRAAAAAQEKChEAAAAAAQoaEQAAAAAAdioRAAAAAoN+NhEAAAABgAJKEQA==");
@@ -423,7 +427,7 @@ mod tests {
             // 1) same length
             assert_eq!(
                 got.len(), expected.len(),
-                "{}: decoded length {} != expected length {}",
+                "-- {}: decoded length {} != expected length {}",
                 name, got.len(), expected.len()
             );
 
@@ -432,12 +436,12 @@ mod tests {
                 let diff = (a - b).abs();
                 assert!(
                     diff < 1e-8,
-                    "{}[{}] = {} but expected {}; diff {} > eps",
+                    "-- {}[{}] = {} but expected {}; diff {} > eps",
                     name, i, a, b, diff
                 );
             }
         }
-        println!("Decoding Unit Test Passed Successfully!");
+        println!("-- Decoding Unit Test Passed Successfully!");
     }
 }
 
