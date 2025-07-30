@@ -133,9 +133,10 @@ fn process_spectral_data(
 ) -> Result<()> {
     // Importing the data file with better error handling
     println!(" Loading spectral data from: {}", input_path);
-    let (spec_map, spec_metadata) = import_mzml(input_path)
+    let spec_map_result = import_mzml(input_path)
         .map_err(|e| CliError::FileError(format!("Failed to import mzML file '{}': {:?}", input_path, e)))?;
-    
+    let (spec_map, spec_metadata) = spec_map_result;
+
     if spec_map.is_empty() {
         return Err(CliError::ProcessingError("No spectra found in the input file".to_string()));
     }
@@ -269,7 +270,7 @@ fn confirm_processing() -> Result<bool> {
 }
 
 fn detect_input_file_type(file_path: &str) -> Option<&str> {
-    match file_path.split('.').next_back() {
+    match file_path.rsplitn(2, '.').next() {
         Some("mzML") | Some("mzml") => Some("mzML"),
         Some("mzXML") | Some("mzxml") => Some("mzXML"),
         _ => None,
@@ -277,7 +278,7 @@ fn detect_input_file_type(file_path: &str) -> Option<&str> {
 }
 
 fn detect_output_file_type(file_path: &str) -> Option<OutputFormat> {
-    match file_path.split('.').next_back() {
+    match file_path.rsplitn(2, '.').next() {
         Some("csv") => Some(OutputFormat::Csv),
         Some("tsv") => Some(OutputFormat::Tsv),
         Some("json") => Some(OutputFormat::Json),

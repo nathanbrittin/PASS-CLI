@@ -39,10 +39,13 @@ pub struct SpectrumMetadata {
 /// Parses an mzML XML file, returning a map from scan ID to its peaks.
 /// Returns Err if any spectrum has mismatched m/z vs intensity lengths.
 pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashMap<String, SpectrumMetadata>), Vec<String>> {
-    // Read the file
-    let xml = fs::read_to_string(file_path).map_err(|e| vec![e.to_string()])?;
-    // Parse
-    let doc = Document::parse(&xml).map_err(|e| vec![e.to_string()])?;
+    // Read the file with better error context
+    let xml = fs::read_to_string(file_path)
+        .map_err(|e| vec![format!("Failed to read file '{}': {}", file_path, e)])?;
+    
+    // Parse with better error context
+    let doc = Document::parse(&xml)
+        .map_err(|e| vec![format!("Failed to parse XML in '{}': {}", file_path, e)])?;
 
     // Iterate over each spectrum
     let mut result: HashMap<String, Vec<Peak>> = HashMap::new();
@@ -68,22 +71,64 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
         let mut selected_ion = 0.0;
         let mut charge = 0;
 
-        // Get metadata from cvParams
+        // Get metadata from cvParams with better error handling
         let mut ms_level = 1;
         for cv in spec.descendants().filter(|n| n.tag_name().name() == "cvParam") {
-            // MS:1000511 = ms level, MS:1000504 = base peak m/z, MS:1000505 = base peak intensity, MS:1000285 = total ion current
-            // MS:1000501 = scan window lower limit, MS:1000500 = scan window upper limit
-            // MS:1000827 = target m/z, MS:1000744 = selected ion, MS:1000041 = charge
             match cv.attribute("accession") {
-                Some("MS:1000511") => ms_level = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000504") => base_peak_mz = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000505") => base_peak_intensity = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000285") => total_ion_current = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000501") => scan_window_lower_limit = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000500") => scan_window_upper_limit = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000827") => target_mz = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000744") => selected_ion = cv.attribute("value").unwrap().parse().unwrap(),
-                Some("MS:1000041") => charge = cv.attribute("value").unwrap().parse().unwrap(),
+                Some("MS:1000511") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => ms_level = val,
+                        None => errors.push(format!("Spectrum {}: Invalid ms_level value", scan)),
+                    }
+                },
+                Some("MS:1000504") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => base_peak_mz = val,
+                        None => errors.push(format!("Spectrum {}: Invalid base_peak_mz value", scan)),
+                    }
+                },
+                Some("MS:1000505") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => base_peak_intensity = val,
+                        None => errors.push(format!("Spectrum {}: Invalid base_peak_intensity value", scan)),
+                    }
+                },
+                Some("MS:1000285") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => total_ion_current = val,
+                        None => errors.push(format!("Spectrum {}: Invalid total_ion_current value", scan)),
+                    }
+                },
+                Some("MS:1000501") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => scan_window_lower_limit = val,
+                        None => errors.push(format!("Spectrum {}: Invalid scan_window_lower_limit value", scan)),
+                    }
+                },
+                Some("MS:1000500") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => scan_window_upper_limit = val,
+                        None => errors.push(format!("Spectrum {}: Invalid scan_window_upper_limit value", scan)),
+                    }
+                },
+                Some("MS:1000827") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => target_mz = val,
+                        None => errors.push(format!("Spectrum {}: Invalid target_mz value", scan)),
+                    }
+                },
+                Some("MS:1000744") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => selected_ion = val,
+                        None => errors.push(format!("Spectrum {}: Invalid selected_ion value", scan)),
+                    }
+                },
+                Some("MS:1000041") => {
+                    match cv.attribute("value").and_then(|v| v.parse().ok()) {
+                        Some(val) => charge = val,
+                        None => errors.push(format!("Spectrum {}: Invalid charge value", scan)),
+                    }
+                },
                 _ => (),
             }
         }
@@ -112,7 +157,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
             let mut is_mz = false;
             let mut is_int = false;
             let mut compressed = false;
-            let mut is_64bit   = false;
+            let mut is_64bit = false;
             
             // Iterate over each cvParam to check for the type
             for cv in bda.descendants().filter(|n| n.tag_name().name() == "cvParam") {
@@ -127,20 +172,22 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 }
             }
 
-            // Extract the data
+            // Extract the data with better error handling
             if let Some(blob) = bda
                 .descendants()
                 .find(|n| n.tag_name().name() == "binary")
                 .and_then(|bin| bin.text())
             {
                 if is_mz {
-                    mzs = decode_mz_array(blob, is_64bit, compressed);
-                    // Convert to f32
-                    mzs = mzs.iter().map(|&x| x).collect();
+                    match decode_mz_array(blob, is_64bit, compressed) {
+                        Ok(decoded_mzs) => mzs = decoded_mzs,
+                        Err(e) => errors.push(format!("Spectrum {}: Failed to decode m/z array: {}", scan, e)),
+                    }
                 } else if is_int {
-                    ints = decode_int_array(blob, is_64bit, compressed);
-                    // Convert to f32
-                    ints = ints.iter().map(|&x| x).collect();
+                    match decode_int_array(blob, is_64bit, compressed) {
+                        Ok(decoded_ints) => ints = decoded_ints,
+                        Err(e) => errors.push(format!("Spectrum {}: Failed to decode intensity array: {}", scan, e)),
+                    }
                 }
             }
         }
@@ -153,7 +200,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 mzs.len(),
                 ints.len()
             ));
-        } else {
+        } else if !mzs.is_empty() {
             // zip into Peak structs and insert into map
             let mut peaks: Vec<Peak> = mzs
                 .into_iter()
@@ -161,11 +208,17 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 .map(|(mz, intensity)| Peak { mz, intensity })
                 .collect();
 
-            // Sort peaks
-            peaks.sort_by(|a, b| a.mz.partial_cmp(&b.mz).unwrap());
+            // Sort peaks with error handling for NaN values
+            peaks.sort_by(|a, b| {
+                a.mz.partial_cmp(&b.mz).unwrap_or_else(|| {
+                    errors.push(format!("Spectrum {}: Found NaN or invalid m/z values during sorting", scan));
+                    std::cmp::Ordering::Equal
+                })
+            });
 
             result.insert(scan, peaks);
         }
+        // Note: Empty spectra (mzs.is_empty() && ints.is_empty()) are silently skipped
     }
 
     // Return result or errors
@@ -176,11 +229,11 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
     }
 }
 
-fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> {
-    // 1) Base64 decode
+fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Vec<f32>, String> {
+    // 1) Base64 decode with better error handling
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
-        .expect("base64 decode failed");
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
 
     // 2) If compressed, zlib-decompress; if that fails, fall back to the raw bytes
     let data: Vec<u8> = if is_zlib {
@@ -188,7 +241,11 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> 
         let mut buf = Vec::new();
         match decompressor.read_to_end(&mut buf) {
             Ok(_) => buf,
-            Err(_) => decoded,
+            Err(e) => {
+                // Log the decompression failure but continue with raw bytes
+                eprintln!("Warning: Zlib decompression failed ({}), using raw bytes", e);
+                decoded
+            }
         }
     } else {
         decoded
@@ -197,49 +254,85 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> 
     // 3) Read as 32 or 64-bit little-endian floats
     let mut cursor = Cursor::new(&data);
     let mut floats: Vec<f32> = Vec::new();
+    
     if is_64bit {
         while let Ok(val) = cursor.read_f64::<LittleEndian>() {
-            floats.push(val as f32);
+            let converted = val as f32;
+            // Check for problematic values
+            if converted.is_infinite() || converted.is_nan() {
+                return Err(format!("Invalid float value encountered: {} (from f64: {})", converted, val));
+            }
+            floats.push(converted);
         }
     } else {
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
+            // Check for problematic values
+            if val.is_infinite() || val.is_nan() {
+                return Err(format!("Invalid float value encountered: {}", val));
+            }
             floats.push(val);
         }
     }
-    floats
+    
+    // Validate that we got some data
+    if floats.is_empty() && !data.is_empty() {
+        return Err("No valid float values could be decoded from binary data".to_string());
+    }
+    
+    Ok(floats)
 }
 
-fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Vec<f32> {
-    // Base64 decode
+fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Vec<f32>, String> {
+    // Base64 decode with better error handling
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
-        .expect("base64 decode failed");
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
 
-   // If compressed, zlib-decompress; if that fails, fall back to the raw bytes
+    // If compressed, zlib-decompress; if that fails, fall back to the raw bytes
     let data: Vec<u8> = if is_zlib {
         let mut decompressor = ZlibDecoder::new(&decoded[..]);
         let mut buf = Vec::new();
         match decompressor.read_to_end(&mut buf) {
             Ok(_) => buf,
-            Err(_) => decoded,
+            Err(e) => {
+                // Log the decompression failure but continue with raw bytes
+                eprintln!("Warning: Zlib decompression failed ({}), using raw bytes", e);
+                decoded
+            }
         }
     } else {
         decoded
     };
 
-    // Read as 32 or 64-bit little-endian integers
+    // Read as 32 or 64-bit little-endian floats (intensity arrays are often stored as floats)
     let mut cursor = Cursor::new(&data);
     let mut floats: Vec<f32> = Vec::new();
+    
     if is_64bit {
         while let Ok(val) = cursor.read_f64::<LittleEndian>() {
-            floats.push(val as f32);
+            let converted = val as f32;
+            // Check for problematic values
+            if converted.is_infinite() || converted.is_nan() {
+                return Err(format!("Invalid intensity value encountered: {} (from f64: {})", converted, val));
+            }
+            floats.push(converted);
         }
     } else {
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
+            // Check for problematic values
+            if val.is_infinite() || val.is_nan() {
+                return Err(format!("Invalid intensity value encountered: {}", val));
+            }
             floats.push(val);
         }
     }
-    floats
+    
+    // Validate that we got some data
+    if floats.is_empty() && !data.is_empty() {
+        return Err("No valid intensity values could be decoded from binary data".to_string());
+    }
+    
+    Ok(floats)
 }
 
 /// Supported output formats for the similarity matrix.
@@ -264,18 +357,40 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
     output_path: P,
     format: OutputFormat,
 ) -> Result<(), Box<dyn Error>> {
+    let path = output_path.as_ref();
+    
+    // Validate inputs
+    if scans.is_empty() {
+        return Err("Cannot write similarity matrix: scan list is empty".into());
+    }
+    
+    if mat.is_empty() {
+        return Err("Cannot write similarity matrix: matrix is empty".into());
+    }
+    
+    let (rows, cols) = mat.dim();
+    if rows != cols {
+        return Err(format!("Matrix must be square, got {}x{}", rows, cols).into());
+    }
+    
+    if scans.len() != rows {
+        return Err(format!("Scan count ({}) doesn't match matrix dimensions ({}x{})", scans.len(), rows, cols).into());
+    }
+
     match format {
         OutputFormat::Csv | OutputFormat::Tsv => {
-           let delimiter = if let OutputFormat::Tsv = format { b'\t' } else { b',' };
+            let delimiter = if let OutputFormat::Tsv = format { b'\t' } else { b',' };
             let mut wtr = WriterBuilder::new()
                 .delimiter(delimiter)
-                .from_path(output_path)?;
+                .from_path(path)
+                .map_err(|e| format!("Failed to create writer for '{}': {}", path.display(), e))?;
 
             // Write header: empty corner + scan IDs
             let mut header = Vec::with_capacity(scans.len() + 1);
             header.push(String::new());
             header.extend_from_slice(scans);
-            wtr.write_record(&header)?;
+            wtr.write_record(&header)
+                .map_err(|e| format!("Failed to write header: {}", e))?;
 
             // Write each row: scan ID + row values
             for (i, scan_id) in scans.iter().enumerate() {
@@ -283,16 +398,31 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 record.push(scan_id.clone());
                 // row as f32 strings
                 for val in mat.index_axis(Axis(1), i) {
+                    // Check for problematic values before formatting
+                    if val.is_nan() || val.is_infinite() {
+                        return Err(format!("Invalid similarity value at row {}: {}", i, val).into());
+                    }
                     // Make the value only 4 digits after decimal point
-                    let val = format!("{val:.4}");
-                    record.push(val.to_string());
+                    let formatted = format!("{:.4}", val);
+                    record.push(formatted);
                 }
-                wtr.write_record(&record)?;
+                wtr.write_record(&record)
+                    .map_err(|e| format!("Failed to write row {}: {}", i, e))?;
             }
 
-            wtr.flush()?;
+            wtr.flush()
+                .map_err(|e| format!("Failed to flush writer: {}", e))?;
         }
         OutputFormat::Json => {
+            // Validate matrix values before serialization
+            for (i, row) in mat.axis_iter(Axis(0)).enumerate() {
+                for (j, &val) in row.iter().enumerate() {
+                    if val.is_nan() || val.is_infinite() {
+                        return Err(format!("Invalid similarity value at [{}, {}]: {}", i, j, val).into());
+                    }
+                }
+            }
+            
             // Flatten matrix rows as owned Vec<f32>
             let rows: Vec<Vec<f32>> = mat
                 .axis_iter(Axis(0))
@@ -302,36 +432,52 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 "scans": scans,
                 "matrix": rows
             });
-            let file = File::create(output_path)?;
-            serde_json::to_writer_pretty(file, &container)?;
+            let file = File::create(path)
+                .map_err(|e| format!("Failed to create file '{}': {}", path.display(), e))?;
+            serde_json::to_writer_pretty(file, &container)
+                .map_err(|e| format!("Failed to write JSON to '{}': {}", path.display(), e))?;
         }
     }
     Ok(())
 }
 
-
-    /// Filter a map of scan IDs to their corresponding peak data by MS level.
-    ///
-    /// # Arguments
-    ///
-    /// * `map` - The map from scan IDs to their peak data.
-    /// * `map_metadata` - The map from scan IDs to their corresponding metadata.
-    /// * `ms_level` - The desired MS level to filter by.
-    ///
-    /// # Returns
-    ///
-    /// A new `HashMap` where each key-value pair is a filtered version of the
-    /// input map. Only scans with the specified MS level are included in the
-    /// output.
-pub fn filter_by_ms_level(map: HashMap<String, Vec<Peak>>, map_metadata: HashMap<String, SpectrumMetadata>, ms_level: u8) -> HashMap<String, Vec<Peak>> {
+/// Filter a map of scan IDs to their corresponding peak data by MS level.
+///
+/// # Arguments
+///
+/// * `map` - The map from scan IDs to their peak data.
+/// * `map_metadata` - The map from scan IDs to their corresponding metadata.
+/// * `ms_level` - The desired MS level to filter by.
+///
+/// # Returns
+///
+/// A new `HashMap` where each key-value pair is a filtered version of the
+/// input map. Only scans with the specified MS level are included in the
+/// output.
+pub fn filter_by_ms_level(
+    map: HashMap<String, Vec<Peak>>, 
+    map_metadata: HashMap<String, SpectrumMetadata>, 
+    ms_level: u8
+) -> HashMap<String, Vec<Peak>> {
     let mut filtered_map = HashMap::new();
+    let mut missing_metadata_count = 0;
+    
     for (scan_id, peaks) in map {
         if let Some(metadata) = map_metadata.get(&scan_id) {
             if metadata.ms_level == ms_level {
                 filtered_map.insert(scan_id, peaks);
             }
+        } else {
+            missing_metadata_count += 1;
+            // Log warning but continue processing
+            eprintln!("Warning: No metadata found for scan ID '{}'", scan_id);
         }
     }
+    
+    if missing_metadata_count > 0 {
+        eprintln!("Warning: {} scans were missing metadata and were excluded from filtering", missing_metadata_count);
+    }
+    
     filtered_map
 }
 
@@ -423,7 +569,8 @@ mod tests {
         
         // Compare the vectors between the two scans
         for (name, expected) in &confirmation_map {
-            let got = &decoded_map[name];
+            let got_result = &decoded_map[name];
+            let got = got_result.as_ref().expect(&format!("Decoding failed for {}", name));
             // 1) same length
             assert_eq!(
                 got.len(), expected.len(),
