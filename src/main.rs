@@ -148,6 +148,7 @@ fn process_spectral_data(
     let ms2_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 2);
     println!(" MS1 spectra: {}, MS2 spectra: {}", ms1_spec_map.len(), ms2_spec_map.len());
 
+
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
     let max_ms1_mz = ms1_spec_map.values()
         .map(|p| p.iter().map(|p| p.mz).fold(0., f32::max))
@@ -164,26 +165,26 @@ fn process_spectral_data(
     let max_mz = f32::max(max_ms1_mz, max_ms2_mz);
     let vector_length = (max_mz / mass_tolerance).ceil() as usize;
     
-    println!(" Processing parameters:");
-    println!("    m/z range: 0.0 to {:.2}", max_mz);
-    println!("    Bin width: {:.4}", mass_tolerance);
-    println!("    Vector size: {}", vector_length);
+    println!("||    Processing parameters:");
+    println!("||        - m/z range: 0.0 to {:.2}", max_mz);
+    println!("||        - Bin width: {:.4}", mass_tolerance);
+    println!("||        - Vector size: {}", vector_length);
 
     // Compute sparse binary vectors with progress indication
-    println!("  Computing sparse binary vectors...");
+    println!("||    Computing sparse binary vectors...");
     let mut ms1_bits_map = compute_sparse_vec_map(&ms1_spec_map, mass_tolerance, max_ms1_mz, ms1_minimum_intensity)
-        .map_err(|e| CliError::ProcessingError(format!("Failed to compute MS1 sparse vectors: {:?}", e)))?;
+        .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS1 sparse vectors: {:?}**", e)))?;
     let mut ms2_bits_map = compute_sparse_vec_map(&ms2_spec_map, mass_tolerance, max_ms2_mz, ms2_minimum_intensity)
-        .map_err(|e| CliError::ProcessingError(format!("Failed to compute MS2 sparse vectors: {:?}", e)))?;
-    println!(" Computed sparse binary vectors successfully.");
+        .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS2 sparse vectors: {:?}**", e)))?;
+    println!("||    Computed sparse binary vectors successfully.");
 
     // Filter background signals
-    println!(" Pruning background signals...");
+    println!("||    Pruning background signals...");
     prune_background_bins_sparse(&mut ms1_bits_map, 0.5)
-        .map_err(|e| CliError::ProcessingError(format!("Failed to prune MS1 background bins: {:?}", e)))?;
+        .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS1 background bins: {:?}**", e)))?;
     prune_background_bins_sparse(&mut ms2_bits_map, 0.5)
-        .map_err(|e| CliError::ProcessingError(format!("Failed to prune MS2 background bins: {:?}", e)))?;
-    println!(" Pruned background signals successfully.");
+        .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS2 background bins: {:?}**", e)))?;
+    println!("||    Pruned background signals successfully.");
 
     // Compute pairwise cosine similarities
     let mut ms1_results: HashMap<String, (Vec<String>, Array2<f32>)> = HashMap::new();
@@ -191,47 +192,47 @@ fn process_spectral_data(
 
     // Process MS1 metrics
     for metric in ms1_similarity_metrics {
-        println!(" Computing MS1 pairwise similarity matrix using {}...", metric);
+        println!("||    Computing MS1 pairwise similarity matrix using {}...", metric);
         let (ms1_scans, ms1_mat) = match *metric {
             "cosine" => compute_pairwise_similarity_matrix_sparse(&ms1_bits_map, &spec_metadata, metric.to_string(), 1, mass_tolerance)
-                .map_err(|e| CliError::ProcessingError(format!("Failed to compute MS1 similarity matrix: {:?}", e)))?,
-            _ => return Err(CliError::ProcessingError(format!("Unsupported MS1 similarity metric: {}", metric))),
+                .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS1 similarity matrix: {:?}**", e)))?,
+            _ => return Err(CliError::ProcessingError(format!("**Unsupported MS1 similarity metric: {}**", metric))),
         };
         ms1_results.insert(metric.to_string(), (ms1_scans, ms1_mat));
     }
     // Process MS2 metrics
     for metric in ms2_similarity_metrics {
         if ms2_bits_map.is_empty() {
-            println!("  Skipping MS2 {} - no MS2 spectra available", metric);
+            println!("**Skipping MS2 {} - no MS2 spectra available**", metric);
             continue;
         }
         
-        println!(" Computing MS2 pairwise similarity matrix using {}...", metric);
+        println!("||    Computing MS2 pairwise similarity matrix using {}...", metric);
         let (ms2_scans, ms2_mat) = match *metric {
             "cosine" => compute_pairwise_similarity_matrix_sparse(&ms2_bits_map, &spec_metadata, metric.to_string(), 2, mass_tolerance)
-                .map_err(|e| CliError::ProcessingError(format!("Failed to compute MS2 similarity matrix: {:?}", e)))?,
+                .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS2 similarity matrix: {:?}**", e)))?,
             "modified-cosine" => compute_pairwise_similarity_matrix_sparse(&ms2_bits_map, &spec_metadata, metric.to_string(), 2, mass_tolerance)
-                .map_err(|e| CliError::ProcessingError(format!("Failed to compute MS2 similarity matrix: {:?}", e)))?,
-            _ => return Err(CliError::ProcessingError(format!("Unsupported MS2 similarity metric: {}", metric))),
+                .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS2 similarity matrix: {:?}**", e)))?,
+            _ => return Err(CliError::ProcessingError(format!("**Unsupported MS2 similarity metric: {}**", metric))),
         };
         ms2_results.insert(metric.to_string(), (ms2_scans, ms2_mat));
     }
 
     // Export results
-    println!(" Exporting similarity matrices...");
+    println!("||    Exporting similarity matrices...");
     
     for (metric, (ms1_scans, ms1_mat)) in &ms1_results {
         let ms1_output_path = output_path.replace(".csv", &format!("_ms1_{}.csv", metric));
         write_similarity_matrix(ms1_scans, ms1_mat, &ms1_output_path, output_format)
-            .map_err(|e| CliError::FileError(format!("Failed to write MS1 {} matrix: {}", metric, e)))?;
-        println!(" Exported MS1 {} matrix to: {}", metric, ms1_output_path);
+            .map_err(|e| CliError::FileError(format!("**Failed to write MS1 {} matrix: {}**", metric, e)))?;
+        println!("||    Exported MS1 {} matrix to: {}", metric, ms1_output_path);
     }
 
     for (metric, (ms2_scans, ms2_mat)) in &ms2_results {
         let ms2_output_path = output_path.replace(".csv", &format!("_ms2_{}.csv", metric));
         write_similarity_matrix(ms2_scans, ms2_mat, &ms2_output_path, output_format)
-            .map_err(|e| CliError::FileError(format!("Failed to write MS2 {} matrix: {}", metric, e)))?;
-        println!(" Exported MS2 {} matrix to: {}", metric, ms2_output_path);
+            .map_err(|e| CliError::FileError(format!("**Failed to write MS2 {} matrix: {}**", metric, e)))?;
+        println!("||    Exported MS2 {} matrix to: {}", metric, ms2_output_path);
     }
 
     Ok(())
@@ -344,7 +345,7 @@ fn prompt_input_path() -> Result<String> {
             clear_current_line();
             println!("||      Path cannot be empty. Please try again.");
             if attempts >= MAX_ATTEMPTS {
-                return Err(CliError::InvalidInput("Too many invalid attempts".to_string()));
+                return Err(CliError::InvalidInput("**Too many invalid attempts**".to_string()));
             }
             continue;
         }
@@ -357,7 +358,7 @@ fn prompt_input_path() -> Result<String> {
             clear_current_line();
             println!("||     File does not exist: {}", path);
             if attempts >= MAX_ATTEMPTS {
-                return Err(CliError::FileError(format!("File not found after {} attempts: {}", MAX_ATTEMPTS, path)));
+                return Err(CliError::FileError(format!("**File not found after {} attempts: {}**", MAX_ATTEMPTS, path)));
             }
             continue;
         }
@@ -367,7 +368,7 @@ fn prompt_input_path() -> Result<String> {
             clear_current_line();
             println!("||     Path is not a file: {}", path);
             if attempts >= MAX_ATTEMPTS {
-                return Err(CliError::FileError("Path is not a valid file".to_string()));
+                return Err(CliError::FileError("**Path is not a valid file**".to_string()));
             }
             continue;
         }
@@ -382,7 +383,7 @@ fn prompt_input_path() -> Result<String> {
             clear_current_line();
             println!("||     Unsupported file type. Supported formats: .mzML, .mzXML");
             if attempts >= MAX_ATTEMPTS {
-                return Err(CliError::InvalidInput("Unsupported file format after multiple attempts".to_string()));
+                return Err(CliError::InvalidInput("**Unsupported file format after multiple attempts**".to_string()));
             }
         }
     }

@@ -24,12 +24,12 @@ pub enum SpectrumProcessingError {
 impl fmt::Display for SpectrumProcessingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SpectrumProcessingError::InvalidParameters(msg) => write!(f, "Invalid parameters: {}", msg),
-            SpectrumProcessingError::EmptyInput(msg) => write!(f, "Empty input: {}", msg),
-            SpectrumProcessingError::ParseError(msg) => write!(f, "Parse error: {}", msg),
-            SpectrumProcessingError::InvalidMsLevel(msg) => write!(f, "Invalid MS level: {}", msg),
-            SpectrumProcessingError::MatrixDimensionMismatch(msg) => write!(f, "Matrix dimension mismatch: {}", msg),
-            SpectrumProcessingError::NumericalError(msg) => write!(f, "Numerical error: {}", msg),
+            SpectrumProcessingError::InvalidParameters(msg) => write!(f, "**Invalid parameters: {}**", msg),
+            SpectrumProcessingError::EmptyInput(msg) => write!(f, "**Empty input: {}**", msg),
+            SpectrumProcessingError::ParseError(msg) => write!(f, "**Parse error: {}**", msg),
+            SpectrumProcessingError::InvalidMsLevel(msg) => write!(f, "**nvalid MS level: {}**", msg),
+            SpectrumProcessingError::MatrixDimensionMismatch(msg) => write!(f, "**Matrix dimension mismatch: {}**", msg),
+            SpectrumProcessingError::NumericalError(msg) => write!(f, "**Numerical error: {}**", msg),
         }
     }
 }
@@ -62,17 +62,17 @@ fn spectrum_to_sparse_vec(
     // Validate parameters
     if bin_width <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "bin_width must be positive".to_string()
+            "**bin_width must be positive**".to_string()
         ));
     }
     if max_mz <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "max_mz must be positive".to_string()
+            "**max_mz must be positive**".to_string()
         ));
     }
     if min_intensity < 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "min_intensity cannot be negative".to_string()
+            "**min_intensity cannot be negative**".to_string()
         ));
     }
 
@@ -104,7 +104,7 @@ fn spectrum_to_sparse_vec(
     let norm = norm_squared.sqrt();
     if !norm.is_finite() {
         return Err(SpectrumProcessingError::NumericalError(
-            "Cannot compute finite norm for spectrum normalization".to_string()
+            "**Cannot compute finite norm for spectrum normalization**".to_string()
         ));
     }
     
@@ -141,17 +141,17 @@ pub fn spectrum_to_dense_vec(
     // Validate parameters
     if bin_width <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "bin_width must be positive".to_string()
+            "**bin_width must be positive**".to_string()
         ));
     }
     if max_mz <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "max_mz must be positive".to_string()
+            "**max_mz must be positive**".to_string()
         ));
     }
     if minimum_intensity < 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "minimum_intensity cannot be negative".to_string()
+            "**minimum_intensity cannot be negative**".to_string()
         ));
     }
 
@@ -159,7 +159,7 @@ pub fn spectrum_to_dense_vec(
     let nbins_f64 = (max_mz / bin_width).ceil() as f64;
     if nbins_f64 > usize::MAX as f64 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "Computed number of bins exceeds maximum usize value".to_string()
+            "**Computed number of bins exceeds maximum usize value**".to_string()
         ));
     }
     let nbins = nbins_f64 as usize;
@@ -167,7 +167,7 @@ pub fn spectrum_to_dense_vec(
     // Check for reasonable memory allocation
     if nbins > 100_000_000 { // 100M bins ~ 400MB for f32
         return Err(SpectrumProcessingError::InvalidParameters(
-            format!("Too many bins requested ({}). Consider increasing bin_width or reducing max_mz", nbins)
+            format!("**Too many bins requested ({}). Consider increasing bin_width or reducing max_mz**", nbins)
         ));
     }
 
@@ -218,7 +218,7 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> Result<f32> {
     // Check if vectors are the same length
     if v1.len() != v2.len() {
         return Err(SpectrumProcessingError::MatrixDimensionMismatch(
-            format!("Vector lengths do not match: {} vs {}", v1.len(), v2.len())
+            format!("**Vector lengths do not match: {} vs {}**", v1.len(), v2.len())
         ));
     }
     
@@ -234,7 +234,7 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> Result<f32> {
     for i in 0..n {
         if !v1[i].is_finite() || !v2[i].is_finite() {
             return Err(SpectrumProcessingError::NumericalError(
-                format!("Non-finite values found at index {}", i)
+                format!("**Non-finite values found at index {}**", i)
             ));
         }
         dot += v1[i] * v2[i];
@@ -249,14 +249,14 @@ pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> Result<f32> {
     let norm_product = norm1.sqrt() * norm2.sqrt();
     if !norm_product.is_finite() || norm_product == 0.0 {
         return Err(SpectrumProcessingError::NumericalError(
-            "Cannot compute finite norm product".to_string()
+            "**Cannot compute finite norm product**".to_string()
         ));
     }
     
     let similarity = dot / norm_product;
     if !similarity.is_finite() {
         return Err(SpectrumProcessingError::NumericalError(
-            "Computed similarity is not finite".to_string()
+            "**Computed similarity is not finite**".to_string()
         ));
     }
     
@@ -272,7 +272,7 @@ pub fn cosine_similarity_sparse(a: &SparseVec, b: &SparseVec) -> Result<f32> {
 pub fn dot(v1: &[f32], v2: &[f32]) -> Result<f32> {
     if v1.len() != v2.len() {
         return Err(SpectrumProcessingError::MatrixDimensionMismatch(
-            format!("Vector lengths do not match: {} vs {}", v1.len(), v2.len())
+            format!("**Vector lengths do not match: {} vs {}**", v1.len(), v2.len())
         ));
     }
     
@@ -283,7 +283,7 @@ pub fn dot(v1: &[f32], v2: &[f32]) -> Result<f32> {
     
     if !result.is_finite() {
         return Err(SpectrumProcessingError::NumericalError(
-            "Dot product result is not finite".to_string()
+            "**Dot product result is not finite**".to_string()
         ));
     }
     
@@ -306,7 +306,7 @@ fn sparse_dot(a: &SparseVec, b: &SparseVec) -> Result<f32> {
                 let product = a[ia].1 * b[ib].1;
                 if !product.is_finite() {
                     return Err(SpectrumProcessingError::NumericalError(
-                        format!("Non-finite product at indices {} and {}", ia, ib)
+                        format!("**Non-finite product at indices {} and {}**", ia, ib)
                     ));
                 }
                 sum += product;
@@ -318,7 +318,7 @@ fn sparse_dot(a: &SparseVec, b: &SparseVec) -> Result<f32> {
     
     if !sum.is_finite() {
         return Err(SpectrumProcessingError::NumericalError(
-            "Sparse dot product result is not finite".to_string()
+            "**Sparse dot product result is not finite**".to_string()
         ));
     }
     
@@ -339,7 +339,7 @@ fn normalize(v: &mut [f32]) -> Result<()> {
     let norm = norm_squared.sqrt();
     if !norm.is_finite() || norm == 0.0 {
         return Err(SpectrumProcessingError::NumericalError(
-            "Cannot compute finite norm for normalization".to_string()
+            "**Cannot compute finite norm for normalization**".to_string()
         ));
     }
     
@@ -347,7 +347,7 @@ fn normalize(v: &mut [f32]) -> Result<()> {
         *x /= norm;
         if !x.is_finite() {
             return Err(SpectrumProcessingError::NumericalError(
-                "Non-finite value after normalization".to_string()
+                "**Non-finite value after normalization**".to_string()
             ));
         }
     }
@@ -361,7 +361,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
 ) -> Result<(Vec<String>, Array2<f32>)> {
     if bits_map.is_empty() {
         return Err(SpectrumProcessingError::EmptyInput(
-            "Input bits_map is empty".to_string()
+            "**Input bits_map is empty**".to_string()
         ));
     }
 
@@ -370,10 +370,10 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let mut scans: Vec<String> = bits_map.keys().cloned().collect();
     scans.sort_by(|a, b| {
         let a_parsed = a.parse::<f32>().map_err(|_| {
-            SpectrumProcessingError::ParseError(format!("Cannot parse scan ID '{}' as f32", a))
+            SpectrumProcessingError::ParseError(format!("**Cannot parse scan ID '{}' as f32**", a))
         });
         let b_parsed = b.parse::<f32>().map_err(|_| {
-            SpectrumProcessingError::ParseError(format!("Cannot parse scan ID '{}' as f32", b))
+            SpectrumProcessingError::ParseError(format!("**Cannot parse scan ID '{}' as f32**", b))
         });
         
         match (a_parsed, b_parsed) {
@@ -383,14 +383,14 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     });
     
     let elapsed = start.elapsed();
-    println!("Sorted scan IDs in {elapsed:.2?}");
+    println!("||    Sorted scan IDs in {elapsed:.2?}");
     
     // Validate that all vectors have the same length
     let first_len = bits_map.values().next().unwrap().len();
     for (scan_id, vec) in bits_map {
         if vec.len() != first_len {
             return Err(SpectrumProcessingError::MatrixDimensionMismatch(
-                format!("Vector for scan {} has length {} but expected {}", scan_id, vec.len(), first_len)
+                format!("**Vector for scan {} has length {} but expected {}**", scan_id, vec.len(), first_len)
             ));
         }
     }
@@ -402,7 +402,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
     let elapsed = start.elapsed();
-    println!("Cached scan IDs in {elapsed:.2?}");
+    println!("||    Cached scan IDs in {elapsed:.2?}");
     
     let start = Instant::now();
     // 3) Parallel compute upper-triangle similarities
@@ -423,7 +423,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     
     let entries = entries?;
     let elapsed = start.elapsed();
-    println!("Computed cosine similarities in {elapsed:.2?}");
+    println!("||    Computed cosine similarities in {elapsed:.2?}");
     
     let start = Instant::now();
     // 4) Fill matrix: diagonal and symmetrize
@@ -435,7 +435,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
         mat[(j, i)] = sim;
     }
     let elapsed = start.elapsed();
-    println!("Filled matrix in {elapsed:.2?}");
+    println!("||    Filled matrix in {elapsed:.2?}");
 
     Ok((scans, mat))
 }
@@ -451,25 +451,25 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     // Validate inputs
     if sparse_map.is_empty() {
         return Err(SpectrumProcessingError::EmptyInput(
-            "Input sparse_map is empty".to_string()
+            "**Input sparse_map is empty**".to_string()
         ));
     }
     
     if similarity_metric == "modified-cosine" && ms_level == 1 {
         return Err(SpectrumProcessingError::InvalidMsLevel(
-            "The modified cosine similarity metric can only be used with MS2 data".to_string()
+            "**The modified cosine similarity metric can only be used with MS2 data**".to_string()
         ));
     }
     
     if similarity_metric == "modified-cosine" && mass_tolerance <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "mass_tolerance must be positive for modified-cosine metric".to_string()
+            "**mass_tolerance must be positive for modified-cosine metric**".to_string()
         ));
     }
     
     if similarity_metric != "cosine" && similarity_metric != "modified-cosine" {
         return Err(SpectrumProcessingError::InvalidParameters(
-            format!("Unknown similarity metric: {}. Must be 'cosine' or 'modified-cosine'", similarity_metric)
+            format!("**Unknown similarity metric: {}. Must be 'cosine' or 'modified-cosine'**", similarity_metric)
         ));
     }
 
@@ -484,13 +484,13 @@ pub fn compute_pairwise_similarity_matrix_sparse(
             _ => a.cmp(b), // Fallback to string comparison
         }
     });
-    println!("Sorted scan IDs in {:.2?}", start.elapsed());
+    println!("||    Sorted scan IDs in {:.2?}", start.elapsed());
 
     let start = Instant::now();
     let spectra: Arc<Vec<&SparseVec>> = Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
-    println!("Cached scan IDs in {:.2?}", start.elapsed());
+    println!("||    Cached scan IDs in {:.2?}", start.elapsed());
 
     let start = Instant::now();
     let scans_clone = scans.clone();
@@ -514,19 +514,19 @@ pub fn compute_pairwise_similarity_matrix_sparse(
                     let sim_result = if metric == "modified-cosine" {
                         let a_meta = spec_metadata.get(&a_id).ok_or_else(|| {
                             SpectrumProcessingError::EmptyInput(
-                                format!("Missing metadata for scan {}", a_id)
+                                format!("**Missing metadata for scan {}**", a_id)
                             )
                         })?;
                         let b_meta = spec_metadata.get(&b_id).ok_or_else(|| {
                             SpectrumProcessingError::EmptyInput(
-                                format!("Missing metadata for scan {}", b_id)
+                                format!("**Missing metadata for scan {}**", b_id)
                             )
                         })?;
                         
                         let delta_mz = b_meta.target_mz - a_meta.target_mz;
                         if !delta_mz.is_finite() {
                             return Err(SpectrumProcessingError::NumericalError(
-                                format!("Invalid target_mz values for scans {} and {}", a_id, b_id)
+                                format!("**Invalid target_mz values for scans {} and {}**", a_id, b_id)
                             ));
                         }
                         
@@ -553,7 +553,7 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     };
     
     let entries = entries?;
-    println!("Computed {} similarities in {:.2?}", entries.len(), start.elapsed());
+    println!("||    Computed {} similarities in {:.2?}", entries.len(), start.elapsed());
 
     let start = Instant::now();
     for i in 0..n {
@@ -563,7 +563,7 @@ pub fn compute_pairwise_similarity_matrix_sparse(
         mat[(i, j)] = sim;
         mat[(j, i)] = sim;
     }
-    println!("Filled matrix in {:.2?}", start.elapsed());
+    println!("||    Filled matrix in {:.2?}", start.elapsed());
 
     Ok((scans, mat))
 }
@@ -604,12 +604,12 @@ pub fn compute_sparse_vec_map(
     // Validate parameters
     if bin_width <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "bin_width must be positive".to_string()
+            "**bin_width must be positive**".to_string()
         ));
     }
     if max_mz <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "max_mz must be positive".to_string()
+            "**max_mz must be positive**".to_string()
         ));
     }
 
@@ -621,7 +621,7 @@ pub fn compute_sparse_vec_map(
             }
             Err(e) => {
                 return Err(SpectrumProcessingError::InvalidParameters(
-                    format!("Error processing scan {}: {}", scan, e)
+                    format!("**Error processing scan {}: {}**", scan, e)
                 ));
             }
         }
@@ -662,7 +662,7 @@ pub fn prune_unused_bins(
     for (scan_id, vec) in bits_map {
         if vec.len() != first_len {
             return Err(SpectrumProcessingError::MatrixDimensionMismatch(
-                format!("Vector for scan {} has length {} but expected {}", scan_id, vec.len(), first_len)
+                format!("**Vector for scan {} has length {} but expected {}**", scan_id, vec.len(), first_len)
             ));
         }
     }
@@ -703,7 +703,7 @@ pub fn prune_background_columns(
 ) -> Result<()> {
     if min_frac < 0.0 || min_frac > 1.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "min_frac must be between 0.0 and 1.0".to_string()
+            "**min_frac must be between 0.0 and 1.0**".to_string()
         ));
     }
     
@@ -756,7 +756,7 @@ pub fn prune_background_bins_sparse(
 ) -> Result<()> {
     if min_frac < 0.0 || min_frac > 1.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "min_frac must be between 0.0 and 1.0".to_string()
+            "**min_frac must be between 0.0 and 1.0**".to_string()
         ));
     }
     
@@ -824,16 +824,16 @@ mod tests {
 
         // 2) Dense similarity
         let (dense_scans, dense_mat) = compute_pairwise_similarity_matrix_ndarray(&bits_map)?;
-        println!("-- Dense scans: {dense_scans:?}");
-        println!("-- Dense matrix:\n{dense_mat}");
+        println!("||    Dense scans: {dense_scans:?}");
+        println!("||    Dense matrix:\n{dense_mat}");
 
         // 3) Convert to sparse & compute
         let sparse_map = dense_to_sparse(&bits_map);
         let dummy_metadata: HashMap<String, SpectrumMetadata> = HashMap::new();
         let (sparse_scans, sparse_mat) =
             compute_pairwise_similarity_matrix_sparse(&sparse_map, &dummy_metadata, "cosine".to_string(), 1, 1.0)?;
-        println!("-- Sparse scans: {sparse_scans:?}");
-        println!("-- Sparse matrix:\n{sparse_mat}");
+        println!("||    Sparse scans: {sparse_scans:?}");
+        println!("||    Sparse matrix:\n{sparse_mat}");
 
         // 4) Verify same ordering and dimensions
         assert_eq!(dense_scans, sparse_scans);
@@ -848,7 +848,7 @@ mod tests {
                 let s = sparse_mat[(i, j)];
                 assert!(
                     (d - s).abs() < 1e-6,
-                    "Mismatch at ({},{}) → dense={}, sparse={}",
+                    "**Mismatch at ({},{}) → dense={}, sparse={}**",
                     i, j, d, s
                 );
             }
@@ -860,18 +860,18 @@ mod tests {
     #[test]
     fn test_bitvec_and_cosine() -> Result<()> {
         // Load sample data
-        println!("Importing test mzML file...");
+        println!("||    Importing test mzML file...");
         let (map, _) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")
                     .map_err(|e| SpectrumProcessingError::ParseError(format!("import_mzml failed: {:?}", e)))?;
-        println!("Number of Spectra in test file: {}", map.len());
+        println!("||    Number of Spectra in test file: {}", map.len());
         
         // Determine the max m/z
         let max_mz = map.values().map(|p| p.iter().map(|p| p.mz).fold(0., f32::max)).fold(0., f32::max);
-        println!("Max m/z: {}", max_mz);
+        println!("||    Max m/z: {}", max_mz);
         
         // Determine bin width
         let bin_width = 0.01;
-        println!("Bin width: {}", bin_width);
+        println!("||    Bin width: {}", bin_width);
         
         // Generate map of bin Vectors
         let bits_map = compute_dense_vec_map(&map, bin_width, max_mz, 0.0)?;
@@ -881,7 +881,7 @@ mod tests {
             
         // Print confirmation if sims is not empty
         if sims.0.len() > 0 {
-            println!("Cosine Similarity Matrix Successfully Generated!");
+            println!("||    Cosine Similarity Matrix Successfully Generated!");
         }
         Ok(())
     }
@@ -995,35 +995,35 @@ mod tests {
         let idx_3 = scans_cosine.iter().position(|x| x == "3").unwrap();
         
         println!("=== COSINE SIMILARITY RESULTS ===");
-        println!("-- Spectrum 1 vs 2 (cosine): {:.4}", matrix_cosine[(idx_1, idx_2)]);
-        println!("-- Spectrum 1 vs 3 (cosine): {:.4}", matrix_cosine[(idx_1, idx_3)]);
-        println!("-- Spectrum 2 vs 3 (cosine): {:.4}", matrix_cosine[(idx_2, idx_3)]);
+        println!("||    Spectrum 1 vs 2 (cosine): {:.4}", matrix_cosine[(idx_1, idx_2)]);
+        println!("||    Spectrum 1 vs 3 (cosine): {:.4}", matrix_cosine[(idx_1, idx_3)]);
+        println!("||    Spectrum 2 vs 3 (cosine): {:.4}", matrix_cosine[(idx_2, idx_3)]);
         
         println!("\n=== MODIFIED COSINE SIMILARITY RESULTS ===");
-        println!("-- Spectrum 1 vs 2 (modified): {:.4}", matrix_modified[(idx_1, idx_2)]);
-        println!("-- Spectrum 1 vs 3 (modified): {:.4}", matrix_modified[(idx_1, idx_3)]);
-        println!("-- Spectrum 2 vs 3 (modified): {:.4}", matrix_modified[(idx_2, idx_3)]);
+        println!("||    Spectrum 1 vs 2 (modified): {:.4}", matrix_modified[(idx_1, idx_2)]);
+        println!("||    Spectrum 1 vs 3 (modified): {:.4}", matrix_modified[(idx_1, idx_3)]);
+        println!("||    Spectrum 2 vs 3 (modified): {:.4}", matrix_modified[(idx_2, idx_3)]);
         
         // Test expectations:
         let cosine_1_vs_2 = matrix_cosine[(idx_1, idx_2)];
-        assert!(cosine_1_vs_2 < 0.1, "-- Regular cosine similarity between shifted spectra should be low, got {}", cosine_1_vs_2);
+        assert!(cosine_1_vs_2 < 0.1, "**Regular cosine similarity between shifted spectra should be low, got {}**", cosine_1_vs_2);
         
         let modified_1_vs_2 = matrix_modified[(idx_1, idx_2)];
-        assert!(modified_1_vs_2 > 0.8, "-- Modified cosine similarity between shifted but similar spectra should be high, got {}", modified_1_vs_2);
+        assert!(modified_1_vs_2 > 0.8, "**Modified cosine similarity between shifted but similar spectra should be high, got {}**", modified_1_vs_2);
         
         let improvement = modified_1_vs_2 - cosine_1_vs_2;
-        assert!(improvement > 0.7, "-- Modified cosine should show significant improvement over regular cosine for shifted spectra, improvement: {}", improvement);
+        assert!(improvement > 0.7, "**Modified cosine should show significant improvement over regular cosine for shifted spectra, improvement: {}**", improvement);
         
         let cosine_1_vs_3 = matrix_cosine[(idx_1, idx_3)];
         let modified_1_vs_3 = matrix_modified[(idx_1, idx_3)];
         let diff_1_vs_3 = (modified_1_vs_3 - cosine_1_vs_3).abs();
-        assert!(diff_1_vs_3 < 0.1, "-- For spectra with same precursor mass, cosine and modified cosine should be similar, diff: {}", diff_1_vs_3);
+        assert!(diff_1_vs_3 < 0.1, "**For spectra with same precursor mass, cosine and modified cosine should be similar, diff: {}**", diff_1_vs_3);
         
         println!("\n=== TEST SUMMARY ===");
-        println!("-- Regular cosine failed to match shifted spectra (similarity: {:.4})", cosine_1_vs_2);
-        println!("-- Modified cosine successfully matched shifted spectra (similarity: {:.4})", modified_1_vs_2);
-        println!("-- Improvement: {:.4}", improvement);
-        println!("-- Both methods agree on truly different spectra");
+        println!("||    Regular cosine failed to match shifted spectra (similarity: {:.4})", cosine_1_vs_2);
+        println!("||    Modified cosine successfully matched shifted spectra (similarity: {:.4})", modified_1_vs_2);
+        println!("||    Improvement: {:.4}", improvement);
+        println!("||    Both methods agree on truly different spectra");
         
         Ok(())
     }
@@ -1095,11 +1095,11 @@ mod tests {
         let cosine_sim = matrix_cosine[(0, 1)];
         let modified_sim = matrix_modified[(0, 1)];
         
-        println!("-- Small mass diff - Cosine: {:.6}, Modified: {:.6}", cosine_sim, modified_sim);
+        println!("||    Small mass diff - Cosine: {:.6}, Modified: {:.6}", cosine_sim, modified_sim);
         
         // They should be nearly identical since the shift is less than 1 bin
         assert!((cosine_sim - modified_sim).abs() < 0.001, 
-            "-- For small mass differences, cosine and modified cosine should be nearly identical");
+            "|| For small mass differences, cosine and modified cosine should be nearly identical");
             
         Ok(())
     }
@@ -1112,10 +1112,10 @@ mod tests {
         println!("\n=== TESTING VECTOR SHIFTING WITH REAL DATA ===");
         
         // Load sample data
-        println!("-- Importing test mzML file...");
+        println!("||    Importing test mzML file...");
         let (spec_map, metadata_map) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")
             .map_err(|e| SpectrumProcessingError::ParseError(format!("import_mzml failed: {:?}", e)))?;
-        println!("-- Number of Spectra in test file: {}", spec_map.len());
+        println!("||    Number of Spectra in test file: {}", spec_map.len());
         
         // Filter for MS2 spectra only (modified cosine requires MS2)
         let ms2_specs: HashMap<String, Vec<Peak>> = spec_map
@@ -1132,7 +1132,7 @@ mod tests {
             .filter(|(_, meta)| meta.ms_level == 2)
             .collect();
         
-        println!("-- Number of MS2 spectra: {}", ms2_specs.len());
+        println!("||    Number of MS2 spectra: {}", ms2_specs.len());
         
         if ms2_specs.len() < 2 {
             println!("\n**Not enough MS2 spectra for shifting test, skipping...**\n");
@@ -1146,8 +1146,8 @@ mod tests {
         let bin_width = 1.0; // 1 Da bins for clearer shifting
         let minimum_intensity = 0.0;
         
-        println!("-- Max m/z: {:.2}", max_mz);
-        println!("-- Bin width: {}", bin_width);
+        println!("||    Max m/z: {:.2}", max_mz);
+        println!("||    Bin width: {}", bin_width);
         
         // Generate sparse vectors
         let sparse_map = compute_sparse_vec_map(&ms2_specs, bin_width, max_mz, minimum_intensity)?;
@@ -1176,22 +1176,22 @@ mod tests {
         }
         
         let (scan_a, scan_b, mass_diff) = &scan_pairs[0];
-        println!("\n-- Testing with spectra: {} vs {}", scan_a, scan_b);
-        println!("-- Mass difference: {:.2} Da", mass_diff);
+        println!("\n||  Testing with spectra: {} vs {}", scan_a, scan_b);
+        println!("||  Mass difference: {:.2} Da", mass_diff);
         
         let meta_a = &ms2_metadata[scan_a];
         let meta_b = &ms2_metadata[scan_b];
         
-        println!("-- Spectrum A - target_mz: {:.2}, peaks: {}", meta_a.target_mz, sparse_map[scan_a].len());
-        println!("-- Spectrum B - target_mz: {:.2}, peaks: {}", meta_b.target_mz, sparse_map[scan_b].len());
+        println!("||    Spectrum A - target_mz: {:.2}, peaks: {}", meta_a.target_mz, sparse_map[scan_a].len());
+        println!("||    Spectrum B - target_mz: {:.2}, peaks: {}", meta_b.target_mz, sparse_map[scan_b].len());
         
         // Calculate expected shift
         let delta_mz = meta_b.target_mz - meta_a.target_mz;
         let shift_bins = (delta_mz / bin_width).round() as isize;
         
-        println!("\n-- Shift calculation:");
-        println!("-- Delta m/z: {:.2}", delta_mz);
-        println!("-- Expected shift in bins: {}", shift_bins);
+        println!("\n||  hift calculation:");
+        println!("||    Delta m/z: {:.2}", delta_mz);
+        println!("||    Expected shift in bins: {}", shift_bins);
         
         // Get original vectors
         let vec_a = &sparse_map[scan_a];
@@ -1202,12 +1202,12 @@ mod tests {
         let vec_a_shifted = shift_sparse_vec(vec_a, shift_bins)?;
         
         println!("\n=== VECTOR COMPARISON ===");
-        println!("-- Original A: {} peaks", vec_a.len());
-        println!("-- Original B: {} peaks", vec_b.len());
-        println!("-- B shifted by {} bins: {} peaks", -shift_bins, vec_b_shifted.len());
-        println!("-- A shifted by {} bins: {} peaks", shift_bins, vec_a_shifted.len());
+        println!("||    Original A: {} peaks", vec_a.len());
+        println!("||    Original B: {} peaks", vec_b.len());
+        println!("||    B shifted by {} bins: {} peaks", -shift_bins, vec_b_shifted.len());
+        println!("||    A shifted by {} bins: {} peaks", shift_bins, vec_a_shifted.len());
         
-        println!("Vector shifting with real data test completed successfully!");
+        println!("||    Vector shifting with real data test completed successfully!");
         Ok(())
     }
 
@@ -1255,6 +1255,6 @@ mod tests {
             1.0
         ).is_err());
         
-        println!("Error handling tests passed!");
+        println!("||    Error handling tests passed!");
     }
 }

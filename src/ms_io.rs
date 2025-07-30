@@ -41,11 +41,11 @@ pub struct SpectrumMetadata {
 pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashMap<String, SpectrumMetadata>), Vec<String>> {
     // Read the file with better error context
     let xml = fs::read_to_string(file_path)
-        .map_err(|e| vec![format!("Failed to read file '{}': {}", file_path, e)])?;
+        .map_err(|e| vec![format!("**Failed to read file '{}': {}**", file_path, e)])?;
     
     // Parse with better error context
     let doc = Document::parse(&xml)
-        .map_err(|e| vec![format!("Failed to parse XML in '{}': {}", file_path, e)])?;
+        .map_err(|e| vec![format!("**Failed to parse XML in '{}': {}**", file_path, e)])?;
 
     // Iterate over each spectrum
     let mut result: HashMap<String, Vec<Peak>> = HashMap::new();
@@ -78,55 +78,55 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 Some("MS:1000511") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => ms_level = val,
-                        None => errors.push(format!("Spectrum {}: Invalid ms_level value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid ms_level value**", scan)),
                     }
                 },
                 Some("MS:1000504") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => base_peak_mz = val,
-                        None => errors.push(format!("Spectrum {}: Invalid base_peak_mz value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid base_peak_mz value**", scan)),
                     }
                 },
                 Some("MS:1000505") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => base_peak_intensity = val,
-                        None => errors.push(format!("Spectrum {}: Invalid base_peak_intensity value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid base_peak_intensity value**", scan)),
                     }
                 },
                 Some("MS:1000285") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => total_ion_current = val,
-                        None => errors.push(format!("Spectrum {}: Invalid total_ion_current value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid total_ion_current value**", scan)),
                     }
                 },
                 Some("MS:1000501") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => scan_window_lower_limit = val,
-                        None => errors.push(format!("Spectrum {}: Invalid scan_window_lower_limit value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid scan_window_lower_limit value**", scan)),
                     }
                 },
                 Some("MS:1000500") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => scan_window_upper_limit = val,
-                        None => errors.push(format!("Spectrum {}: Invalid scan_window_upper_limit value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid scan_window_upper_limit value**", scan)),
                     }
                 },
                 Some("MS:1000827") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => target_mz = val,
-                        None => errors.push(format!("Spectrum {}: Invalid target_mz value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid target_mz value**", scan)),
                     }
                 },
                 Some("MS:1000744") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => selected_ion = val,
-                        None => errors.push(format!("Spectrum {}: Invalid selected_ion value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid selected_ion value**", scan)),
                     }
                 },
                 Some("MS:1000041") => {
                     match cv.attribute("value").and_then(|v| v.parse().ok()) {
                         Some(val) => charge = val,
-                        None => errors.push(format!("Spectrum {}: Invalid charge value", scan)),
+                        None => errors.push(format!("**Spectrum {}: Invalid charge value**", scan)),
                     }
                 },
                 _ => (),
@@ -181,12 +181,12 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                 if is_mz {
                     match decode_mz_array(blob, is_64bit, compressed) {
                         Ok(decoded_mzs) => mzs = decoded_mzs,
-                        Err(e) => errors.push(format!("Spectrum {}: Failed to decode m/z array: {}", scan, e)),
+                        Err(e) => errors.push(format!("**Spectrum {}: Failed to decode m/z array: {}**", scan, e)),
                     }
                 } else if is_int {
                     match decode_int_array(blob, is_64bit, compressed) {
                         Ok(decoded_ints) => ints = decoded_ints,
-                        Err(e) => errors.push(format!("Spectrum {}: Failed to decode intensity array: {}", scan, e)),
+                        Err(e) => errors.push(format!("**Spectrum {}: Failed to decode intensity array: {}**", scan, e)),
                     }
                 }
             }
@@ -195,7 +195,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
         // Check lengths match or record error
         if mzs.len() != ints.len() {
             errors.push(format!(
-                "Spectrum {} has mismatched lengths: m/z={} intensity={}",
+                "**Spectrum {} has mismatched lengths: m/z={} intensity={}**",
                 scan,
                 mzs.len(),
                 ints.len()
@@ -211,7 +211,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
             // Sort peaks with error handling for NaN values
             peaks.sort_by(|a, b| {
                 a.mz.partial_cmp(&b.mz).unwrap_or_else(|| {
-                    errors.push(format!("Spectrum {}: Found NaN or invalid m/z values during sorting", scan));
+                    errors.push(format!("**Spectrum {}: Found NaN or invalid m/z values during sorting**", scan));
                     std::cmp::Ordering::Equal
                 })
             });
@@ -233,7 +233,7 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Ve
     // 1) Base64 decode with better error handling
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
-        .map_err(|e| format!("Base64 decode failed: {}", e))?;
+        .map_err(|e| format!("**Base64 decode failed: {}**", e))?;
 
     // 2) If compressed, zlib-decompress; if that fails, fall back to the raw bytes
     let data: Vec<u8> = if is_zlib {
@@ -243,7 +243,7 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Ve
             Ok(_) => buf,
             Err(e) => {
                 // Log the decompression failure but continue with raw bytes
-                eprintln!("Warning: Zlib decompression failed ({}), using raw bytes", e);
+                eprintln!("**Warning: Zlib decompression failed ({}), using raw bytes**", e);
                 decoded
             }
         }
@@ -260,7 +260,7 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Ve
             let converted = val as f32;
             // Check for problematic values
             if converted.is_infinite() || converted.is_nan() {
-                return Err(format!("Invalid float value encountered: {} (from f64: {})", converted, val));
+                return Err(format!("**Invalid float value encountered: {} (from f64: {})**", converted, val));
             }
             floats.push(converted);
         }
@@ -268,7 +268,7 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Ve
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
             // Check for problematic values
             if val.is_infinite() || val.is_nan() {
-                return Err(format!("Invalid float value encountered: {}", val));
+                return Err(format!("**Invalid float value encountered: {}**", val));
             }
             floats.push(val);
         }
@@ -276,7 +276,7 @@ fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Ve
     
     // Validate that we got some data
     if floats.is_empty() && !data.is_empty() {
-        return Err("No valid float values could be decoded from binary data".to_string());
+        return Err("**No valid float values could be decoded from binary data**".to_string());
     }
     
     Ok(floats)
@@ -286,7 +286,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
     // Base64 decode with better error handling
     let decoded = general_purpose::STANDARD
         .decode(base64_seq)
-        .map_err(|e| format!("Base64 decode failed: {}", e))?;
+        .map_err(|e| format!("**Base64 decode failed: {}**", e))?;
 
     // If compressed, zlib-decompress; if that fails, fall back to the raw bytes
     let data: Vec<u8> = if is_zlib {
@@ -296,7 +296,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
             Ok(_) => buf,
             Err(e) => {
                 // Log the decompression failure but continue with raw bytes
-                eprintln!("Warning: Zlib decompression failed ({}), using raw bytes", e);
+                eprintln!("**Warning: Zlib decompression failed ({}), using raw bytes**", e);
                 decoded
             }
         }
@@ -313,7 +313,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
             let converted = val as f32;
             // Check for problematic values
             if converted.is_infinite() || converted.is_nan() {
-                return Err(format!("Invalid intensity value encountered: {} (from f64: {})", converted, val));
+                return Err(format!("**Invalid intensity value encountered: {} (from f64: {})**", converted, val));
             }
             floats.push(converted);
         }
@@ -321,7 +321,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
         while let Ok(val) = cursor.read_f32::<LittleEndian>() {
             // Check for problematic values
             if val.is_infinite() || val.is_nan() {
-                return Err(format!("Invalid intensity value encountered: {}", val));
+                return Err(format!("**Invalid intensity value encountered: {}**", val));
             }
             floats.push(val);
         }
@@ -329,7 +329,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
     
     // Validate that we got some data
     if floats.is_empty() && !data.is_empty() {
-        return Err("No valid intensity values could be decoded from binary data".to_string());
+        return Err("**No valid intensity values could be decoded from binary data**".to_string());
     }
     
     Ok(floats)
@@ -361,20 +361,20 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
     
     // Validate inputs
     if scans.is_empty() {
-        return Err("Cannot write similarity matrix: scan list is empty".into());
+        return Err("**Cannot write similarity matrix: scan list is empty**".into());
     }
     
     if mat.is_empty() {
-        return Err("Cannot write similarity matrix: matrix is empty".into());
+        return Err("**Cannot write similarity matrix: matrix is empty**".into());
     }
     
     let (rows, cols) = mat.dim();
     if rows != cols {
-        return Err(format!("Matrix must be square, got {}x{}", rows, cols).into());
+        return Err(format!("**Matrix must be square, got {}x{}**", rows, cols).into());
     }
     
     if scans.len() != rows {
-        return Err(format!("Scan count ({}) doesn't match matrix dimensions ({}x{})", scans.len(), rows, cols).into());
+        return Err(format!("**Scan count ({}) doesn't match matrix dimensions ({}x{})**", scans.len(), rows, cols).into());
     }
 
     match format {
@@ -383,14 +383,14 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
             let mut wtr = WriterBuilder::new()
                 .delimiter(delimiter)
                 .from_path(path)
-                .map_err(|e| format!("Failed to create writer for '{}': {}", path.display(), e))?;
+                .map_err(|e| format!("**Failed to create writer for '{}': {}**", path.display(), e))?;
 
             // Write header: empty corner + scan IDs
             let mut header = Vec::with_capacity(scans.len() + 1);
             header.push(String::new());
             header.extend_from_slice(scans);
             wtr.write_record(&header)
-                .map_err(|e| format!("Failed to write header: {}", e))?;
+                .map_err(|e| format!("**Failed to write header: {}**", e))?;
 
             // Write each row: scan ID + row values
             for (i, scan_id) in scans.iter().enumerate() {
@@ -400,25 +400,25 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 for val in mat.index_axis(Axis(1), i) {
                     // Check for problematic values before formatting
                     if val.is_nan() || val.is_infinite() {
-                        return Err(format!("Invalid similarity value at row {}: {}", i, val).into());
+                        return Err(format!("**Invalid similarity value at row {}: {}**", i, val).into());
                     }
                     // Make the value only 4 digits after decimal point
                     let formatted = format!("{:.4}", val);
                     record.push(formatted);
                 }
                 wtr.write_record(&record)
-                    .map_err(|e| format!("Failed to write row {}: {}", i, e))?;
+                    .map_err(|e| format!("**Failed to write row {}: {}**", i, e))?;
             }
 
             wtr.flush()
-                .map_err(|e| format!("Failed to flush writer: {}", e))?;
+                .map_err(|e| format!("**Failed to flush writer: {}**", e))?;
         }
         OutputFormat::Json => {
             // Validate matrix values before serialization
             for (i, row) in mat.axis_iter(Axis(0)).enumerate() {
                 for (j, &val) in row.iter().enumerate() {
                     if val.is_nan() || val.is_infinite() {
-                        return Err(format!("Invalid similarity value at [{}, {}]: {}", i, j, val).into());
+                        return Err(format!("**Invalid similarity value at [{}, {}]: {}**", i, j, val).into());
                     }
                 }
             }
@@ -433,9 +433,9 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
                 "matrix": rows
             });
             let file = File::create(path)
-                .map_err(|e| format!("Failed to create file '{}': {}", path.display(), e))?;
+                .map_err(|e| format!("**Failed to create file '{}': {}**", path.display(), e))?;
             serde_json::to_writer_pretty(file, &container)
-                .map_err(|e| format!("Failed to write JSON to '{}': {}", path.display(), e))?;
+                .map_err(|e| format!("**Failed to write JSON to '{}': {}**", path.display(), e))?;
         }
     }
     Ok(())
@@ -470,12 +470,12 @@ pub fn filter_by_ms_level(
         } else {
             missing_metadata_count += 1;
             // Log warning but continue processing
-            eprintln!("Warning: No metadata found for scan ID '{}'", scan_id);
+            eprintln!("**Warning: No metadata found for scan ID '{}'**", scan_id);
         }
     }
     
     if missing_metadata_count > 0 {
-        eprintln!("Warning: {} scans were missing metadata and were excluded from filtering", missing_metadata_count);
+        eprintln!("**Warning: {} scans were missing metadata and were excluded from filtering**", missing_metadata_count);
     }
     
     filtered_map
@@ -494,7 +494,7 @@ mod tests {
         // Map of pyOpenMS sample file names to expected spectrum counts
         let mut file_num_spectra_map: HashMap<&str, usize> = HashMap::new();
         let data_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("data");
-        println!("Data directory: {}", data_dir.display());
+        println!("||    Data directory: {}", data_dir.display());
         file_num_spectra_map.insert("190509_Ova_native_25ngul_R.mzML", 194);
         file_num_spectra_map.insert("BSA1.mzML", 1684);
         file_num_spectra_map.insert("FeatureFinderCentroided_1_input.mzML", 112);
@@ -512,21 +512,21 @@ mod tests {
             let path = data_dir.join(fname);
             let path_str = path.to_str().expect("Invalid path");
             println!("----------------------------------------------------");
-            println!("-- Testing file: {}", path_str);
+            println!("||    Testing file: {}", path_str);
 
             // Verify that the file exists and is readable
-            assert!(Path::new(path_str).exists(), "-- File {} does not exist", fname);
+            assert!(Path::new(path_str).exists(), "**File {} does not exist**", fname);
 
             // Use the public API import_mzml_to_map
             let result = import_mzml(path_str);
-            assert!(result.is_ok(), "-- Failed to import {}", fname);
+            assert!(result.is_ok(), "**Failed to import {}**", fname);
             let (map, _) = result.unwrap();
 
             // Ensure the number of spectra matches the expected count
             let num_spectra = map.len();
-            assert_eq!(num_spectra, expected_count, "-- Incorrect number of spectra in {}", fname);
+            assert_eq!(num_spectra, expected_count, "**Incorrect number of spectra in {}**", fname);
 
-            println!("-- File {} has {} spectra", fname, map.len());
+            println!("**File {} has {} spectra**", fname, map.len());
 
             // Print a summary of the first spectra (scan number, mzs, ints)
             let (scan, peak) = map.iter().next().unwrap();
@@ -534,7 +534,7 @@ mod tests {
             let mz = peak[0].mz;
             let int = peak[0].intensity;
             println!(
-                "-- First spectrum: scan {}, ex. m/z: {}, int: {}",
+                "**First spectrum: scan {}, ex. m/z: {}, int: {}**",
                 scan, mz, int
             );
         }
@@ -574,7 +574,7 @@ mod tests {
             // 1) same length
             assert_eq!(
                 got.len(), expected.len(),
-                "-- {}: decoded length {} != expected length {}",
+                "**{}: decoded length {} != expected length {}**",
                 name, got.len(), expected.len()
             );
 
@@ -583,12 +583,12 @@ mod tests {
                 let diff = (a - b).abs();
                 assert!(
                     diff < 1e-8,
-                    "-- {}[{}] = {} but expected {}; diff {} > eps",
+                    "**{}[{}] = {} but expected {}; diff {} > eps**",
                     name, i, a, b, diff
                 );
             }
         }
-        println!("-- Decoding Unit Test Passed Successfully!");
+        println!("||    Decoding Unit Test Passed Successfully!");
     }
 }
 
