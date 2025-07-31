@@ -101,7 +101,7 @@ fn run_cli() -> Result<()> {
                        noise_threshold, mass_tolerance);
 
     if !confirm_processing()? {
-        println!("Processing cancelled by user.");
+        println!("**Processing cancelled by user.**");
         return Ok(());
     }
 
@@ -116,7 +116,7 @@ fn run_cli() -> Result<()> {
     )?;
 
     let duration = start.elapsed();
-    println!(" Success! Processing completed in {duration:.2?}");
+    println!("||    Success! Processing completed in {duration:.2?}");
     Ok(())
 }
 
@@ -132,7 +132,7 @@ fn process_spectral_data(
     mass_tolerance: f32,
 ) -> Result<()> {
     // Importing the data file with better error handling
-    println!(" Loading spectral data from: {}", input_path);
+    println!("||    Loading spectral data from: {}", input_path);
     let spec_map_result = import_mzml(input_path)
         .map_err(|e| CliError::FileError(format!("Failed to import mzML file '{}': {:?}", input_path, e)))?;
     let (spec_map, spec_metadata) = spec_map_result;
@@ -141,12 +141,12 @@ fn process_spectral_data(
         return Err(CliError::ProcessingError("No spectra found in the input file".to_string()));
     }
     
-    println!(" Parsed {} spectra successfully.", spec_map.len());
+    println!("||    Parsed {} spectra successfully.", spec_map.len());
 
     // Filter to only MS1 and MS2
     let ms1_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 1);
     let ms2_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 2);
-    println!(" MS1 spectra: {}, MS2 spectra: {}", ms1_spec_map.len(), ms2_spec_map.len());
+    println!("||    Num. MS1 spectra: {}, Num. MS2 spectra: {}", ms1_spec_map.len(), ms2_spec_map.len());
 
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
@@ -159,7 +159,7 @@ fn process_spectral_data(
         .fold(0., f32::max);
 
     if max_ms1_mz == 0. && max_ms2_mz == 0. {
-        return Err(CliError::ProcessingError("No MS1 or MS2 data available in the input file".to_string()));
+        return Err(CliError::ProcessingError("**No MS1 or MS2 data available in the input file**".to_string()));
     }
 
     let max_mz = f32::max(max_ms1_mz, max_ms2_mz);
@@ -169,6 +169,7 @@ fn process_spectral_data(
     println!("||        - m/z range: 0.0 to {:.2}", max_mz);
     println!("||        - Bin width: {:.4}", mass_tolerance);
     println!("||        - Vector size: {}", vector_length);
+    println!("------------------------------------------------------------------------------");
 
     // Compute sparse binary vectors with progress indication
     println!("||    Computing sparse binary vectors...");
@@ -176,7 +177,8 @@ fn process_spectral_data(
         .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS1 sparse vectors: {:?}**", e)))?;
     let mut ms2_bits_map = compute_sparse_vec_map(&ms2_spec_map, mass_tolerance, max_ms2_mz, ms2_minimum_intensity)
         .map_err(|e| CliError::ProcessingError(format!("**Failed to compute MS2 sparse vectors: {:?}**", e)))?;
-    println!("||    Computed sparse binary vectors successfully.");
+    println!("||    ✔ Computed sparse binary vectors successfully.");
+    println!("------------------------------------------------------------------------------");
 
     // Filter background signals
     println!("||    Pruning background signals...");
@@ -184,7 +186,8 @@ fn process_spectral_data(
         .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS1 background bins: {:?}**", e)))?;
     prune_background_bins_sparse(&mut ms2_bits_map, 0.5)
         .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS2 background bins: {:?}**", e)))?;
-    println!("||    Pruned background signals successfully.");
+    println!("||    ✔ Pruned background signals successfully.");
+    println!("------------------------------------------------------------------------------");
 
     // Compute pairwise cosine similarities
     let mut ms1_results: HashMap<String, (Vec<String>, Array2<f32>)> = HashMap::new();
@@ -200,6 +203,8 @@ fn process_spectral_data(
         };
         ms1_results.insert(metric.to_string(), (ms1_scans, ms1_mat));
     }
+    println!("||    ✔ Computed MS1 pairwise similarity matrices successfully.");
+    println!("------------------------------------------------------------------------------");
     // Process MS2 metrics
     for metric in ms2_similarity_metrics {
         if ms2_bits_map.is_empty() {
@@ -217,6 +222,8 @@ fn process_spectral_data(
         };
         ms2_results.insert(metric.to_string(), (ms2_scans, ms2_mat));
     }
+    println!("||    ✔ Computed MS2 pairwise similarity matrices successfully.");
+    println!("------------------------------------------------------------------------------");
 
     // Export results
     println!("||    Exporting similarity matrices...");

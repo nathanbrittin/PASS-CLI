@@ -383,7 +383,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     });
     
     let elapsed = start.elapsed();
-    println!("||    Sorted scan IDs in {elapsed:.2?}");
+    // println!("||    Sorted scan IDs in {elapsed:.2?}");
     
     // Validate that all vectors have the same length
     let first_len = bits_map.values().next().unwrap().len();
@@ -402,7 +402,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
     let elapsed = start.elapsed();
-    println!("||    Cached scan IDs in {elapsed:.2?}");
+    // println!("||    Cached scan IDs in {elapsed:.2?}");
     
     let start = Instant::now();
     // 3) Parallel compute upper-triangle similarities
@@ -484,13 +484,13 @@ pub fn compute_pairwise_similarity_matrix_sparse(
             _ => a.cmp(b), // Fallback to string comparison
         }
     });
-    println!("||    Sorted scan IDs in {:.2?}", start.elapsed());
+    // println!("||    Sorted scan IDs in {:.2?}", start.elapsed());
 
     let start = Instant::now();
     let spectra: Arc<Vec<&SparseVec>> = Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
-    println!("||    Cached scan IDs in {:.2?}", start.elapsed());
+    // println!("||    Cached scan IDs in {:.2?}", start.elapsed());
 
     let start = Instant::now();
     let scans_clone = scans.clone();
