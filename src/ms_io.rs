@@ -336,7 +336,7 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
 }
 
 /// Supported output formats for the similarity matrix.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize, Debug)]
 pub enum OutputFormat {
     Csv,
     Tsv,

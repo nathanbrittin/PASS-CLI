@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Set environment variables for pkg-config
+export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
+export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,7 +48,9 @@ if [ "$NEED_INSTALL" = true ]; then
         cmake \
         build-essential \
         pkg-config \
-        libssl-dev
+        libssl-dev \
+        libfontconfig1-dev \
+        libfreetype6-dev
     
     echo -e "${GREEN}✓ Dependencies installed${NC}"
 else

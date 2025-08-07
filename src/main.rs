@@ -7,6 +7,7 @@ use std::path::Path;
 use std::io::{self, Write}; // Import io and Write traits for flushing output
 use std::time::Instant;
 use std::error::Error;
+use std::fs::File;
 
 mod ms_io;
 pub use ms_io::{
@@ -125,6 +126,24 @@ fn run_cli() -> Result<()> {
         Some(&image_format),
         Some(&theme)
     );
+
+    // Write the configuration to a file
+    let config = Config {
+        input_path: input_path.clone(),
+        output_path: output_path.clone(),
+        output_format: output_format.clone(),
+        ms1_similarity_metrics: ms1_similarity_metrics.clone(),
+        ms2_similarity_metrics: ms2_similarity_metrics.clone(),
+        ms1_minimum_intensity: ms1_minimum_intensity,
+        ms2_minimum_intensity: ms2_minimum_intensity,
+        noise_threshold: noise_threshold,
+        mass_tolerance: mass_tolerance,
+        heatmap_enabled: heatmap_enabled,
+        image_path: Some(image_path.clone()),
+        image_format: Some(image_format.clone()),
+        theme: Some(theme.clone()),
+    };
+    write_config_to_file(&config)?;
 
     if !confirm_processing()? {
         println!("**Processing cancelled by user.**");
@@ -348,9 +367,9 @@ pub fn print_configuration(
         }
         if let Some(t) = theme {
             println!("||    Color theme:");
-            println!("||       - Background: rgb({}, {}, {})", t.background.0, t.background.1, t.background.2);
-            println!("||       - Low similarity: rgb({}, {}, {})", t.low.0, t.low.1, t.low.2);
-            println!("||       - High similarity: rgb({}, {}, {})", t.high.0, t.high.1, t.high.2);
+            println!("||       - Background: rgb({}, {}, {})", t.background.r, t.background.g, t.background.b);
+            println!("||       - Low similarity: rgb({}, {}, {})", t.low.r, t.low.g, t.low.b);
+            println!("||       - High similarity: rgb({}, {}, {})", t.high.r, t.high.g, t.high.b);
         }
     } else {
         println!("||    Heatmap generation: DISABLED");
@@ -737,4 +756,32 @@ fn get_extension(format: &ImageFormat) -> &'static str {
         ImageFormat::Svg => "svg",
         ImageFormat::Jpeg => "jpeg",
     }
+}
+
+#[derive(serde::Serialize)]
+struct Config {
+    input_path: String,
+    output_path: String,
+    output_format: OutputFormat,
+    ms1_similarity_metrics: Vec<&'static str>,
+    ms2_similarity_metrics: Vec<&'static str>,
+    ms1_minimum_intensity: f32,
+    ms2_minimum_intensity: f32,
+    noise_threshold: u32,
+    mass_tolerance: f32,
+    heatmap_enabled: bool,
+    image_path: Option<String>,
+    image_format: Option<ImageFormat>,
+    theme: Option<ColorTheme>,
+}
+
+fn write_config_to_file(config: &Config) -> Result<()> {
+    let mut file = File::create("config.toml")?;
+
+    let toml_str = toml::ser::to_string(config)
+        .map_err(|e| CliError::FileError(format!("Failed to serialize config to TOML: {}", e)))?;
+    use std::io::Write;
+    file.write_all(toml_str.as_bytes())?;
+
+    Ok(())
 }

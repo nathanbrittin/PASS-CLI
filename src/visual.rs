@@ -3,7 +3,7 @@ use ndarray::Array2;
 use plotters::style::RGBColor;
 
 /// Supported output formats
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ImageFormat {
     Png,
     Svg,
@@ -21,12 +21,40 @@ impl ImageFormat {
     }
 }
 
-pub struct ColorTheme {
-    pub background: RGBColor,
-    pub low: RGBColor,
-    pub high: RGBColor,
+/// A serializable color type that can be converted to/from RGBColor
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SerializableColor {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
+impl SerializableColor {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    pub fn to_rgb_color(&self) -> RGBColor {
+        RGBColor(self.r, self.g, self.b)
+    }
+
+    pub fn from_rgb_color(color: RGBColor) -> Self {
+        Self {
+            r: color.0,
+            g: color.1,
+            b: color.2,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ColorTheme {
+    pub background: SerializableColor,
+    pub low: SerializableColor,
+    pub high: SerializableColor,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ThemeName {
     Classic,
     DarkBlue,
@@ -74,72 +102,72 @@ impl ThemeName {
     pub fn get_theme(&self) -> ColorTheme {
         match self {
             ThemeName::Classic => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(0, 0, 255),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(0, 0, 255),
             },
             ThemeName::DarkBlue => ColorTheme {
-                background: RGBColor(20, 20, 30),
-                low: RGBColor(30, 30, 50),
-                high: RGBColor(0, 200, 255),
+                background: SerializableColor::new(20, 20, 30),
+                low: SerializableColor::new(30, 30, 50),
+                high: SerializableColor::new(0, 200, 255),
             },
             ThemeName::Inferno => ColorTheme {
-                background: RGBColor(10, 10, 10),
-                low: RGBColor(40, 0, 20),
-                high: RGBColor(255, 200, 50),
+                background: SerializableColor::new(10, 10, 10),
+                low: SerializableColor::new(40, 0, 20),
+                high: SerializableColor::new(255, 200, 50),
             },
             ThemeName::Viridis => ColorTheme {
-                background: RGBColor(20, 20, 20),
-                low: RGBColor(68, 1, 84),
-                high: RGBColor(253, 231, 37),
+                background: SerializableColor::new(20, 20, 20),
+                low: SerializableColor::new(68, 1, 84),
+                high: SerializableColor::new(253, 231, 37),
             },
             ThemeName::Plasma => ColorTheme {
-                background: RGBColor(30, 5, 40),
-                low: RGBColor(13, 8, 135),
-                high: RGBColor(240, 249, 33),
+                background: SerializableColor::new(30, 5, 40),
+                low: SerializableColor::new(13, 8, 135),
+                high: SerializableColor::new(240, 249, 33),
             },
             ThemeName::GrayScale => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(50, 50, 50),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(50, 50, 50),
             },
             // New white background themes
             ThemeName::WhiteRed => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(220, 20, 20),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(220, 20, 20),
             },
             ThemeName::WhiteBlue => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(20, 20, 220),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(20, 20, 220),
             },
             ThemeName::WhiteGreen => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(20, 180, 20),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(20, 180, 20),
             },
             ThemeName::WhiteOrange => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(255, 140, 20),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(255, 140, 20),
             },
             ThemeName::WhitePurple => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(255, 255, 255),
-                high: RGBColor(160, 20, 200),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(255, 255, 255),
+                high: SerializableColor::new(160, 20, 200),
             },
             // Black background theme
             ThemeName::BlackYellow => ColorTheme {
-                background: RGBColor(0, 0, 0),
-                low: RGBColor(40, 40, 0),
-                high: RGBColor(255, 255, 20),
+                background: SerializableColor::new(0, 0, 0),
+                low: SerializableColor::new(40, 40, 0),
+                high: SerializableColor::new(255, 255, 20),
             },
             // Jet colormap (blue -> cyan -> yellow -> red)
             ThemeName::Jet => ColorTheme {
-                background: RGBColor(255, 255, 255),
-                low: RGBColor(0, 0, 140),
-                high: RGBColor(140, 0, 0),
+                background: SerializableColor::new(255, 255, 255),
+                low: SerializableColor::new(0, 0, 140),
+                high: SerializableColor::new(140, 0, 0),
             },
         }
     }
@@ -158,7 +186,7 @@ where
     B::ErrorType: 'static + Send + Sync,
 {
     let root = backend.into_drawing_area();
-    root.fill(&theme.background)?;
+    root.fill(&theme.background.to_rgb_color())?;
 
     let n = similarity_matrix.nrows();
     assert_eq!(n, similarity_matrix.ncols(), "Matrix must be square");
@@ -184,7 +212,7 @@ where
             let color = if is_jet_theme {
                 interpolate_jet_colormap(value as f64)
             } else {
-                interpolate_rgb(value as f64, &theme.low, &theme.high)
+                interpolate_rgb(value as f64, &theme.low.to_rgb_color(), &theme.high.to_rgb_color())
             };
             chart.draw_series(std::iter::once(Rectangle::new(
                 [(col, n - row - 1), (col + 1, n - row)],
@@ -214,8 +242,8 @@ pub fn plot_similarity_heatmap(
     let output_path = output_file.to_owned();
     
     // Check if this is the Jet theme (special handling needed)
-    let is_jet_theme = theme.low.0 == 0 && theme.low.1 == 0 && theme.low.2 == 140 &&
-                      theme.high.0 == 140 && theme.high.1 == 0 && theme.high.2 == 0;
+    let is_jet_theme = theme.low.r == 0 && theme.low.g == 0 && theme.low.b == 140 &&
+                      theme.high.r == 140 && theme.high.g == 0 && theme.high.b == 0;
 
     match image_format {
         ImageFormat::Png | ImageFormat::Jpeg => {
@@ -265,10 +293,11 @@ fn interpolate_jet_colormap(score: f64) -> RGBColor {
     }
 }
 
+#[allow(dead_code)]
 fn draw_color_legend<D>(
     area: &DrawingArea<D, plotters::coord::Shift>,
-    low: &RGBColor,
-    high: &RGBColor,
+    low: &SerializableColor,
+    high: &SerializableColor,
 ) -> Result<(), Box<dyn std::error::Error>> 
 where
     D: DrawingBackend,
@@ -285,7 +314,7 @@ where
     // Draw a very thin horizontal color gradient bar (15px total height)
     legend.draw_series((0..bar_width).map(|x| {
         let v = x as f64 / (bar_width - 1) as f64;
-        let color = interpolate_rgb(v, low, high);
+        let color = interpolate_rgb(v, &low.to_rgb_color(), &high.to_rgb_color());
         Rectangle::new([(x, 2), (x + 1, 8)], color.filled())
     }))?;
 

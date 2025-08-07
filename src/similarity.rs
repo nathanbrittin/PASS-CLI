@@ -382,7 +382,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
         }
     });
     
-    let elapsed = start.elapsed();
+    let _elapsed = start.elapsed();
     // println!("||    Sorted scan IDs in {elapsed:.2?}");
     
     // Validate that all vectors have the same length
@@ -401,7 +401,7 @@ pub fn compute_pairwise_similarity_matrix_ndarray(
 
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));
-    let elapsed = start.elapsed();
+    let _elapsed = start.elapsed();
     // println!("||    Cached scan IDs in {elapsed:.2?}");
     
     let start = Instant::now();
@@ -473,7 +473,7 @@ pub fn compute_pairwise_similarity_matrix_sparse(
         ));
     }
 
-    let start = Instant::now();
+    let _start = Instant::now();
     let mut scans: Vec<String> = sparse_map.keys().cloned().collect();
     scans.sort_by(|a, b| {
         let a_parsed = a.parse::<f32>();
@@ -486,7 +486,7 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     });
     // println!("||    Sorted scan IDs in {:.2?}", start.elapsed());
 
-    let start = Instant::now();
+    let _start = Instant::now();
     let spectra: Arc<Vec<&SparseVec>> = Arc::new(scans.iter().map(|id| &sparse_map[id]).collect());
     let n = scans.len();
     let mut mat = Array2::<f32>::zeros((n, n));

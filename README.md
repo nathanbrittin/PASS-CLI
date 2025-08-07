@@ -8,7 +8,7 @@
 
 <!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/{PASS}-CLI/ci.yml)](https://github.com/YourUser/PASS-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/PASS-CLI/tests.yml?label=tests)](https://github.com/YourUser/PASS-CLI/actions) -->
 
-PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats.
+PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats. It can also generate an informative heatmap to visualize the similarities that were computed which can be exported as a PNG, SVG, or JPEG.
 
 ---
 
