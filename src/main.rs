@@ -28,6 +28,9 @@ pub use similarity::{
     compute_pairwise_similarity_matrix_ndarray
 };
 
+mod visual;
+use visual::{plot_similarity_heatmap, ImageFormat, ColorTheme, ThemeName};
+
 // Custom error types for better error handling
 #[derive(Debug)]
 enum CliError {
@@ -94,11 +97,34 @@ fn run_cli() -> Result<()> {
     let noise_threshold = prompt_noise_threshold()?;
     let mass_tolerance = prompt_mass_tolerance()?;
 
+    // Visuals config
+    let heatmap_enabled = prompt_generate_heatmap()?;
+
+    // If heatmap is enabled, get all config at once
+    let (image_path, image_format, theme) = if heatmap_enabled {
+        let path = prompt_output_image_path()?;
+        let format = prompt_image_format()?;
+        let theme = prompt_color_theme()?;
+        (path, format, theme)
+    } else {
+        ("".to_string(), ImageFormat::Png, ThemeName::Classic.get_theme())
+    };
+
     // Print a final confirmation
-    print_configuration(&input_path, &output_path, &output_format, 
-                       &ms1_similarity_metrics, &ms2_similarity_metrics,
-                       ms1_minimum_intensity, ms2_minimum_intensity, 
-                       noise_threshold, mass_tolerance);
+    print_configuration(&input_path, 
+        &output_path, 
+        &output_format, 
+        &ms1_similarity_metrics, 
+        &ms2_similarity_metrics,
+        ms1_minimum_intensity,
+        ms2_minimum_intensity,
+        noise_threshold,
+        mass_tolerance,
+        heatmap_enabled,
+        Some(&image_path),
+        Some(&image_format),
+        Some(&theme)
+    );
 
     if !confirm_processing()? {
         println!("**Processing cancelled by user.**");
@@ -112,7 +138,8 @@ fn run_cli() -> Result<()> {
         &input_path, &output_path, output_format,
         &ms1_similarity_metrics, &ms2_similarity_metrics,
         ms1_minimum_intensity, ms2_minimum_intensity,
-        noise_threshold, mass_tolerance
+        noise_threshold, mass_tolerance,
+        heatmap_enabled, Some(&image_format), Some(&theme),
     )?;
 
     let duration = start.elapsed();
@@ -130,6 +157,9 @@ fn process_spectral_data(
     ms2_minimum_intensity: f32,
     _noise_threshold: u32,
     mass_tolerance: f32,
+    heatmap_enabled: bool,
+    image_format: Option<&ImageFormat>,
+    theme: Option<&ColorTheme>,
 ) -> Result<()> {
     // Importing the data file with better error handling
     println!("||    Loading spectral data from: {}", input_path);
@@ -242,14 +272,57 @@ fn process_spectral_data(
         println!("||    Exported MS2 {} matrix to: {}", metric, ms2_output_path);
     }
 
+    if heatmap_enabled {
+        println!("||    Creating heatmaps...");
+
+        for (metric, (ms1_scans, ms1_mat)) in &ms1_results {
+            let ext = get_extension(image_format.unwrap_or(&ImageFormat::Png));
+            let file_path = output_path.replace(".csv", &format!("_ms1_{}_heatmap.{}", metric, ext));
+
+            plot_similarity_heatmap(
+                ms1_scans,
+                ms1_mat,
+                &file_path,
+                image_format.unwrap_or(&ImageFormat::Png),
+                theme.unwrap_or(&ThemeName::Classic.get_theme())
+            )
+            .map_err(|e| CliError::FileError(format!("**Failed to create MS1 {} heatmap: {}**", metric, e)))?;
+            println!("||    Created MS1 {} heatmap: {}", metric, file_path);
+        }
+
+        for (metric, (ms2_scans, ms2_mat)) in &ms2_results {
+            let ext = get_extension(image_format.unwrap_or(&ImageFormat::Png));
+            let file_path = output_path.replace(".csv", &format!("_ms2_{}_heatmap.{}", metric, ext));
+
+            plot_similarity_heatmap(
+                ms2_scans,
+                ms2_mat,
+                &file_path,
+                image_format.unwrap_or(&ImageFormat::Png),
+                theme.unwrap_or(&ThemeName::Classic.get_theme())
+            )
+            .map_err(|e| CliError::FileError(format!("**Failed to create MS2 {} heatmap: {}**", metric, e)))?;
+            println!("||    Created MS2 {} heatmap: {}", metric, file_path);
+        }
+    }
+
     Ok(())
 }
 
-fn print_configuration(
-    input_path: &str, output_path: &str, output_format: &OutputFormat,
-    ms1_metrics: &[&str], ms2_metrics: &[&str],
-    ms1_min_intensity: f32, ms2_min_intensity: f32,
-    noise_threshold: u32, mass_tolerance: f32,
+pub fn print_configuration(
+    input_path: &str,
+    output_path: &str,
+    output_format: &OutputFormat,
+    ms1_metrics: &[&str],
+    ms2_metrics: &[&str],
+    ms1_min_intensity: f32,
+    ms2_min_intensity: f32,
+    noise_threshold: u32,
+    mass_tolerance: f32,
+    heatmap_enabled: bool,
+    image_path: Option<&str>,
+    image_format: Option<&ImageFormat>,
+    theme: Option<&ColorTheme>,
 ) {
     println!("----------------------------------------------------------------------------------------------");
     println!(" CONFIGURATION SUMMARY");
@@ -263,6 +336,26 @@ fn print_configuration(
     println!("||    MS2 Minimum intensity threshold: {:.2}", ms2_min_intensity);
     println!("||    Noise threshold: {}", noise_threshold);
     println!("||    Mass tolerance: {:.4}", mass_tolerance);
+
+    if heatmap_enabled {
+        println!("||");
+        println!("||    Heatmap generation: ENABLED");
+        if let Some(path) = image_path {
+            println!("||    Heatmap output path: {}", path);
+        }
+        if let Some(format) = image_format {
+            println!("||    Heatmap image format: {:?}", format);
+        }
+        if let Some(t) = theme {
+            println!("||    Color theme:");
+            println!("||       - Background: rgb({}, {}, {})", t.background.0, t.background.1, t.background.2);
+            println!("||       - Low similarity: rgb({}, {}, {})", t.low.0, t.low.1, t.low.2);
+            println!("||       - High similarity: rgb({}, {}, {})", t.high.0, t.high.1, t.high.2);
+        }
+    } else {
+        println!("||    Heatmap generation: DISABLED");
+    }
+
     println!("----------------------------------------------------------------------------------------------");
 }
 
@@ -570,5 +663,78 @@ fn prompt_noise_threshold() -> Result<u32> {
                 println!("||     Invalid number format. Please enter a positive integer");
             }
         }
+    }
+}
+
+fn prompt_generate_heatmap() -> Result<bool> {
+    println!("----------------------------------------------------------------------------------------------");
+    print!("||    Generate similarity matrix heatmap? [Y/n]: ");
+    io::stdout().flush()?;
+
+    let response = read_input_line()?.to_lowercase();
+    Ok(response.is_empty() || response == "y" || response == "yes")
+}
+
+fn prompt_image_format() -> Result<ImageFormat> {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        println!("||    Output image format: png, svg, or jpeg");
+        print!("||    Format (default: png): ");
+        io::stdout().flush()?;
+
+        let input = read_input_line()?;
+        let format_str = if input.is_empty() { "png" } else { input.as_str() };
+
+        if let Some(fmt) = ImageFormat::from_ext(format_str) {
+            println!("||     Output format set to: {}", format_str.to_lowercase());
+            return Ok(fmt);
+        } else {
+            println!("||     Invalid format. Try: png, svg, jpeg.");
+        }
+    }
+}
+
+fn prompt_color_theme() -> Result<ColorTheme> {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        println!("||    Choose a color theme:");
+        for name in ThemeName::list() {
+            println!("||      - {name}");
+        }
+
+        print!("||    Theme (default: classic): ");
+        io::stdout().flush()?;
+
+        let input = read_input_line()?;
+        let name = if input.is_empty() { "classic" } else { &input };
+
+        if let Some(theme) = ThemeName::from_str(name) {
+            println!("||     Selected theme: {}", name.to_lowercase());
+            return Ok(theme.get_theme());
+        } else {
+            println!("||     Invalid theme. Please try again.");
+        }
+    }
+}
+
+fn prompt_output_image_path() -> Result<String> {
+    println!("----------------------------------------------------------------------------------------------");
+    println!("||    Path to save the heatmap image (default: similarity_heatmap.png): ");
+    print!("||    Path: ");
+    io::stdout().flush()?;
+
+    let input = read_input_line()?;
+    Ok(if input.is_empty() {
+        "similarity_heatmap.png".to_string()
+    } else {
+        input
+    })
+}
+
+fn get_extension(format: &ImageFormat) -> &'static str {
+    match format {
+        ImageFormat::Png => "png",
+        ImageFormat::Svg => "svg",
+        ImageFormat::Jpeg => "jpeg",
     }
 }
