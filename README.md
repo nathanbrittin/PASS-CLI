@@ -8,7 +8,17 @@
 
 <!-- [![Build Status](https://img.shields.io/github/actions/workflow/status/YourUser/{PASS}-CLI/ci.yml)](https://github.com/YourUser/PASS-CLI/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Tests](https://img.shields.io/github/actions/workflow/status/YourUser/PASS-CLI/tests.yml?label=tests)](https://github.com/YourUser/PASS-CLI/actions) -->
 
-PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, cross‑platform Rust command‑line tool for untargeted mass spectrometry data spectral similarity analysis. It computes pairwise similarity scores between all MS/MS spectra in a run and exports the resulting similarity matrix in CSV, TSV, or JSON formats. It can also generate an informative heatmap to visualize the similarities that were computed which can be exported as a PNG, SVG, or JPEG.
+**PASS-CLI** (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a high-performance, cross-platform command-line tool designed for comprehensive spectral similarity analysis in untargeted mass spectrometry workflows. Built with Rust for maximum speed and reliability, PASS-CLI efficiently processes MS/MS spectra to compute pairwise similarity matrices, enabling researchers to identify spectral relationships, detect molecular families, and explore chemical space within their datasets.
+
+## What PASS-CLI Does
+
+- **Analyzes spectral relationships**: Computes similarity scores between all MS/MS spectra pairs in your dataset using proven cosine similarity algorithms
+- **Handles large datasets**: Leverages parallel processing to efficiently analyze thousands of spectra with optimal memory usage  
+- **Provides flexible output**: Exports similarity matrices in multiple formats (CSV, TSV, JSON) for downstream analysis in your preferred tools
+- **Visualizes results**: Generates publication-ready heatmaps (PNG, SVG, JPEG) to immediately visualize spectral clustering patterns
+- **Streamlines workflows**: Interactive prompts guide users through analysis parameters without complex command-line syntax
+
+Perfect for metabolomics researchers, natural product chemists, and mass spectrometry practitioners who need fast, reliable spectral comparison tools for data exploration and hypothesis generation.
 
 ---
 
@@ -34,14 +44,34 @@ PASS-CLI (**P**airwise **A**nalyzer for **S**pectral **S**imilarity) is a fast, 
 
 ## Features
 
-* **Multi-format support**: Read `mzML` and `mzXML` files out of the box.
-* **Similarity metrics**:
+### **Multi-format Input Support**
+* **Native mzML & mzXML parsing**: Direct support for standard mass spectrometry formats without external dependencies
+* **Robust file handling**: Automatic format detection and validation with detailed error reporting
+* **Large file optimization**: Efficient memory management for processing datasets with thousands of spectra
 
-  * Standard cosine similarity
-  * (Future) Modified cosine similarity (accounts for neutral losses and precursor mass shifts)
-* **Parallel processing**: Built on [Rayon](https://crates.io/crates/rayon) for efficient multi‑threaded computation.
-* **Flexible filtering**: Discard low‑intensity peaks and limit the number of spectra for rapid prototyping.
-* **Output formats**: Export a full similarity matrix as `CSV`, `TSV`, or `JSON`.
+### **Advanced Similarity Algorithms**
+* **Cosine similarity**: Industry-standard vector cosine similarity with configurable m/z tolerance (default: 0.01 Da)
+* **Modified cosine similarity**: Advanced algorithm accounting for neutral losses and precursor mass shifts for enhanced metabolite family detection
+
+### **High-Performance Computing**
+* **Parallel processing**: Multi-threaded computation using [Rayon](https://crates.io/crates/rayon) for optimal CPU utilization
+* **Memory efficient**: Smart algorithms that scale gracefully with dataset size (O(N²) complexity optimization)
+* **Progress tracking**: Real-time progress indicators and performance metrics during analysis
+
+### **Flexible Data Processing**
+* **Intelligent filtering**: Remove low-intensity peaks and noise with customizable thresholds
+* **Spectrum selection**: Limit analysis to specific spectra subsets for rapid prototyping and testing
+* **Quality control**: Built-in validation to ensure data integrity throughout the analysis pipeline
+
+### **Comprehensive Output Options**
+* **Multiple matrix formats**: Export similarity matrices as `CSV`, `TSV`, or `JSON` for seamless integration with R, Python, Excel, and other analysis tools
+* **Publication-ready visualizations**: Generate high-quality heatmaps in multiple formats (`PNG`, `SVG`, `JPEG`)
+* **Customizable themes**: Choose from 13 built-in color themes or create custom visualizations
+
+### **User-Friendly Interface**
+* **Interactive prompts**: Guided workflow eliminates the need to memorize complex command-line arguments
+* **Smart defaults**: Sensible parameter defaults based on mass spectrometry best practices
+* **Cross-platform compatibility**: Runs natively on Windows, macOS, and Linux with identical functionality
 
 ## Prerequisites for Developers
 
@@ -170,32 +200,79 @@ The output file contains an N×N similarity matrix, where N is the number of spe
 
 ## Similarity Methods
 
+PASS-CLI implements spectral similarity algorithms optimized for mass spectrometry data analysis. Both methods support configurable parameters to accommodate different experimental setups and research objectives.
+
 ### Cosine Similarity
 
-* Standard vector cosine similarity with default peak m/z tolerance of `0.01` Da.
-* Good for overall spectral shape comparisons.
+**Standard vector cosine similarity** - the gold standard for spectral comparison in metabolomics.
 
-### Modified Cosine Similarity (Future)
+**How it works:**
+- Converts MS/MS spectra into high-dimensional vectors based on m/z and intensity values
+- Computes the cosine of the angle between spectrum vectors in multi-dimensional space
+- Produces similarity scores from 0.0 (completely different) to 1.0 (identical)
 
-* Compensates for mass shifts and neutral losses between MS/MS spectra.
-* Suitable for detecting related fragmentation patterns across different precursor masses.
-* User‑configurable tolerance (`--mass-tolerance`).
+**Key features:**
+- **Configurable m/z tolerance**: Default 0.01 Da, adjustable for different mass accuracy requirements
+- **Intensity normalization**: Automatic peak intensity normalization for fair comparison
+- **Peak matching**: Intelligent algorithm to align peaks across spectra within tolerance windows
 
-## Performance
+**Best used for:**
+- General spectral comparison and clustering
+- Quality control and replicate analysis  
+- Initial data exploration and pattern discovery
+- Comparing spectra from the same ionization mode and similar fragmentation conditions
 
-* Utilizes Rayon to parallelize O(N²) comparisons.
-* Memory usage scales quadratically with the number of spectra.
-* For large runs (> 10,000 spectra), consider downsampling or limiting via prompts.
-* `Verbose` mode prints per‑step timings.
+### Modified Cosine Similarity
+
+**Advanced algorithm** designed specifically for metabolomics applications where neutral losses and mass shifts are biologically relevant.
+
+**How it works:**
+- Extends standard cosine similarity by considering shifted peak patterns
+- Accounts for neutral losses (H₂O, NH₃, CO₂, etc.) commonly observed in metabolite fragmentation
+- Compares not only direct peak matches but also shifted versions representing potential neutral losses
+- Automatically detects and weights biologically relevant mass differences
+
+**Key features:**
+- **Precursor mass compensation**: Accounts for differences in precursor masses between related compounds
+- **Configurable mass tolerance**: Fine-tune sensitivity for different analytical platforms
+
+**Best used for:**
+- **Metabolite family detection**: Identifying related compounds with similar core structures
+- **Analog discovery**: Finding structural analogs and derivatives in complex mixtures
+- **Natural product analysis**: Detecting compound series with systematic mass differences
+- **Untargeted metabolomics**: Exploring chemical space for novel compound relationships
+
+**Technical parameters:**
+- **Mass tolerance**: Configurable tolerance for peak matching and neutral loss detection
+- **Shift range**: Automatic detection of relevant mass shifts based on common neutral losses
+- **Minimum intensity threshold**: Filters low-intensity peaks that may introduce noise
+
+### Algorithm Performance Comparison
+
+| Feature | Cosine Similarity | Modified Cosine Similarity |
+|---------|-------------------|----------------------------|
+| **Speed** | Very Fast | Fast |
+| **Memory Usage** | Low | Moderate |
+| **Best for Replicates** | Excellent | Excellent |
+| **Best for Analogs** | Good | Excellent |
+| **Parameter Sensitivity** | Low | Moderate |
+| **Biological Relevance** | High | Very High |
+
+### Choosing the Right Method
+
+- **Start with Cosine Similarity** for initial data exploration, quality control, and when comparing highly similar spectra
+- **Use Modified Cosine Similarity** for comprehensive metabolite annotation, analog discovery, and when exploring chemical diversity in complex samples
+- **Consider your research goals**: Use both methods and compare results to gain complementary insights into your data
+
 
 ## Roadmap
 
-* [ ] Fix error handling of files not containing MS2 data
-* [ ] Implement the modified cosine score for effective comaprison of MS2 spectra
+* [x] Fix error handling of files not containing MS2 data
+* [x] Implement the modified cosine score for effective comaprison of MS2 spectra
 * [ ] Preprocessing filters (e.g., baseline subtraction, feature extraction)
 * [ ] Chromatogram overlay with similarity mapping
 * [ ] Export to network formats (e.g., GEXF, GraphML)
-* [ ] Output visualization scripts for heatmaps and network graphs
+* [x] Output visualization scripts for heatmaps and network graphs
 * [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS
 
 ## Tests
