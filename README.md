@@ -294,67 +294,66 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 <tr>
 <td align="center">
 <img src="examples\classic_output_ms1_cosine_heatmap.png" alt="Classic Theme" width="200"/>
-<br><strong>classic</strong>
+<br><strong></strong>
 </td>
 <td align="center">
 <img src="examples\classic_output_ms2_cosine_heatmap.png" alt="Classic Theme" width="200"/>
-<br><strong>classic</strong>
+<br><strong>Classic</strong>
 </td>
 <td align="center">
 <img src="examples\classic_output_ms2_modified-cosine_heatmap.png" alt="Classic Theme" width="200"/>
-<br><strong>classic</strong>
+<br><strong></strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\darkblue_output_ms1_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
-<br><strong>darkblue</strong>
+<br><strong></strong>
 </td>
 <td align="center">
 <img src="examples\darkblue_output_ms2_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
-<br><strong>darkblue</strong>
+<br><strong>Darkblue</strong>
 </td>
 <td align="center">
 <img src="examples\darkblue_output_ms2_modified-cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
-<br><strong>darkblue</strong>
+<br><strong></strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\jet_output_ms1_cosine_heatmap.png" alt="Jet Theme" width="200"/>
-<br><strong>jet</strong>
+<br><strong></strong>
 </td>
 <td align="center">
 <img src="examples\jet_output_ms2_cosine_heatmap.png" alt="Jet Theme" width="200"/>
-<br><strong>jet</strong>
+<br><strong>Jet</strong>
 </td>
 <td align="center">
 <img src="examples\jet_output_ms2_modified-cosine_heatmap.png" alt="Jet Theme" width="200"/>
-<br><strong>jet</strong>
+<br><strong></strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\viridis_output_ms1_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
-<br><strong>viridis</strong>
+<br><strong></strong>
 </td>
 <td align="center">
 <img src="examples\viridis_output_ms2_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
-<br><strong>viridis</strong>
+<br><strong>Viridis</strong>
 </td>
 <td align="center">
 <img src="examples\viridis_output_ms2_modified-cosine_heatmap.png" alt="Viridis Theme" width="200"/>
-<br><strong>viridis</strong>
+<br><strong></strong>
 </td>
 </tr>
 </table>
 
 ### Theme Recommendations
 
-- **classic**: Traditional blue-to-red gradient, excellent for presentations
+- **classic**: Traditional blue gradient, excellent for presentations
 - **viridis**: Perceptually uniform, colorblind-safe, ideal for scientific publications
 - **plasma/inferno/magma**: High-contrast themes perfect for highlighting strong similarities
-- **cividis**: Colorblind-optimized alternative to viridis
 - **blues/reds/greens/purples**: Monochromatic themes for specific aesthetic requirements
 - **grays**: Grayscale option for print publications or accessibility needs
 
