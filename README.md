@@ -90,28 +90,31 @@ cd PASS-CLI
 
 Compile either directly using cargo or using the build-all.sh bash script for automatically building binaries for all OS.
 
+1. Build in cargo release mode
 ```
 # Build in cargo release mode
 cargo build --release
 ```
 
-or execute build-all.sh in Unix or WSL command line.
+The above command creates an optimized executable in the `target/release/` directory.
+
+2. Optionally execute build-all.sh in Unix or WSL command line.
 
 ```
 .\build-all.sh
 ```
 
-The resulting executable is:
+The resulting executables are:
 
-* `target/release/pass-cli` (Unix/Linux/macOS)
-* `target\release\pass-cli.exe` (Windows)
+* `target/release/pass-cli-<version>-linux-x64.tar.gz` (Unix/Linux/macOS)
+* `target\release\pass-cli-<version>-windows-x64.zip` (Windows)
 
 ## Releases & Precompiled Binaries
 
 Precompiled executables are available on the [GitHub Releases page](https://github.com/nathanbrittin/PASS-CLI/releases) for major platforms:
 
-- **Linux/macOS**: `pass-cli`
-- **Windows**: `pass-cli.exe`
+- **Linux/macOS**: `pass-cli-<version>-linux-x64.tar.gz`
+- **Windows**: `pass-cli-<version>-windows-x64.zip`
 
 ### Installation from a Release
 
