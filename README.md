@@ -293,6 +293,16 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 <table>
 <tr>
 <td align="center">
+<br><strong>MS1 Cosine Score Heatmap</strong>
+</td>
+<td align="center">
+<br><strong>MS2 Cosine Score Heatmap</strong>
+</td>
+<td align="center">
+<br><strong>MS2 Modified Cosine Score Heatmap</strong>
+</td>
+<tr>
+<td align="center">
 <img src="examples\classic_output_ms1_cosine_heatmap.png" alt="Classic Theme" width="200"/>
 <br><strong>-------------------</strong>
 </td>
