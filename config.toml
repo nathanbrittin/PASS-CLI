@@ -1,14 +1,14 @@
-input_path = 'C:\Users\nbrit\Desktop\Rust Practice\sample.mzML'
-output_path = 'C:\Users\nbrit\Desktop\Rust Practice\pass-cli-testing\classic_output.csv'
+input_path = 'C:\Users\nbrit\Desktop\Rust Practice\pass-cli\tests\data\FeatureFinderMetaboIdent_1_input.mzML'
+output_path = "output.csv"
 output_format = "Csv"
 ms1_similarity_metrics = ["cosine"]
 ms2_similarity_metrics = ["cosine", "modified-cosine"]
-ms1_minimum_intensity = 10000.0
-ms2_minimum_intensity = 2000.0
+ms1_minimum_intensity = 1.0
+ms2_minimum_intensity = 0.0
 noise_threshold = 100
 mass_tolerance = 0.01
 heatmap_enabled = true
-image_path = 'C:\Users\nbrit\Desktop\Rust Practice\pass-cli-testing\classic_heatmap.png'
+image_path = "similarity_heatmap.png"
 image_format = "Png"
 
 [theme.background]

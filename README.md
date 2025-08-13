@@ -164,7 +164,11 @@ After entry, PASS‑CLI computes and saves the matrix.
 
 ## Quick Start Example
 
-Assuming you have a small test file at `examples/test_run.mzML`:
+### Example Data & Expected Output
+
+A few example mzML are provided under `tests\data`. These files have all been verified to work.
+
+Assuming you use the small test file at `pass-cli\tests\data\FeatureFinderMetaboIdent_1_input.mzML`:
 
 ```bash
 # Run the tool
@@ -173,28 +177,31 @@ Assuming you have a small test file at `examples/test_run.mzML`:
 pass-cli.exe
 
 # Enter when prompted:
-# Input file path: examples/test_run.mzML
-# Output file path: examples/test_similarity.csv
-# Similarity metric: cosine
-# Minimum peak intensity: 1000.0
-# Noise Threshold: 1000.0
-# Mass tolerance: 0.02
+# Input file path: tests\data\FeatureFinderMetaboIdent_1_input.mzML
+# Output file path: tests\data\FeatureFinderMetaboIdent_1_output.csv
+# MS1 Similarity metric: cosine
+# MS2 Similarity metric(s): cosine, modified-cosine
+# MS1 Minimum peak intensity: 1.0
+# MS2 Minimum peak intensity: 0.0
+# Noise Threshold: 100.0
+# Mass tolerance: 0.01
+# Generate similarity matrix heatmap? [Y/n]: Y
+# Path to save the heatmap image: tests\data\heatmap.png
+# Output image format: png
+# Choose a color theme: classic
+# Continue with processing? [Y/n]: Y
 ```
 
 Inspect `examples/test_similarity.csv`—it should look like:
 
 ```csv
-  1,      2,        3
-1,1.000000,0.812345,0.234567
-2,0.812345,1.000000,0.456789
-3,0.234567,0.456789,1.000000
+  0,      2,        3
+0,1.0000,0.0967,0.2710
+2,0.0967,1.0000,0.1434
+3,0.2710,0.1434,1.0000
 ```
 
-## Example Data & Expected Output
-
-A few example mzML are provided under `tests/data`. These files have all been verified to work.
-
-## Output
+### Output
 
 The output file contains an N×N similarity matrix, where N is the number of spectra:
 
@@ -268,6 +275,89 @@ PASS-CLI implements spectral similarity algorithms optimized for mass spectromet
 - **Consider your research goals**: Use both methods and compare results to gain complementary insights into your data
 
 
+## Visualization & Heatmap Options
+
+PASS-CLI automatically generates publication-friendly heatmaps to visualize spectral similarity patterns in your data. The interactive workflow guides you through visualization options, making it easy to create compelling figures for presentations and publications.
+
+### Heatmap Features
+
+- **Multiple output formats**: PNG, SVG, JPEG for different use cases
+- **High resolution**: Optimized for both screen display and print publication
+- **Automatic scaling**: Smart color mapping based on your similarity score distribution
+- **Professional styling**: Clean, readable layouts with proper axis labels and legends
+
+### Available Color Themes
+
+PASS-CLI includes 13 carefully designed color themes optimized for scientific visualization. Some themes are designed to be colorblind-friendly and print-ready.
+
+<table>
+<tr>
+<td align="center">
+<img src="examples\classic_output_ms1_cosine_heatmap.png" alt="Classic Theme" width="200"/>
+<br><strong>classic</strong>
+</td>
+<td align="center">
+<img src="examples\classic_output_ms2_cosine_heatmap.png" alt="Classic Theme" width="200"/>
+<br><strong>classic</strong>
+</td>
+<td align="center">
+<img src="examples\classic_output_ms2_modified-cosine_heatmap.png" alt="Classic Theme" width="200"/>
+<br><strong>classic</strong>
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="examples\darkblue_output_ms1_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
+<br><strong>darkblue</strong>
+</td>
+<td align="center">
+<img src="examples\darkblue_output_ms2_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
+<br><strong>darkblue</strong>
+</td>
+<td align="center">
+<img src="examples\darkblue_output_ms2_modified-cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
+<br><strong>darkblue</strong>
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="examples\jet_output_ms1_cosine_heatmap.png" alt="Jet Theme" width="200"/>
+<br><strong>jet</strong>
+</td>
+<td align="center">
+<img src="examples\jet_output_ms2_cosine_heatmap.png" alt="Jet Theme" width="200"/>
+<br><strong>jet</strong>
+</td>
+<td align="center">
+<img src="examples\jet_output_ms2_modified-cosine_heatmap.png" alt="Jet Theme" width="200"/>
+<br><strong>jet</strong>
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="examples\viridis_output_ms1_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
+<br><strong>viridis</strong>
+</td>
+<td align="center">
+<img src="examples\viridis_output_ms2_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
+<br><strong>viridis</strong>
+</td>
+<td align="center">
+<img src="examples\viridis_output_ms2_modified-cosine_heatmap.png" alt="Viridis Theme" width="200"/>
+<br><strong>viridis</strong>
+</td>
+</tr>
+</table>
+
+### Theme Recommendations
+
+- **classic**: Traditional blue-to-red gradient, excellent for presentations
+- **viridis**: Perceptually uniform, colorblind-safe, ideal for scientific publications
+- **plasma/inferno/magma**: High-contrast themes perfect for highlighting strong similarities
+- **cividis**: Colorblind-optimized alternative to viridis
+- **blues/reds/greens/purples**: Monochromatic themes for specific aesthetic requirements
+- **grays**: Grayscale option for print publications or accessibility needs
+
 ## Roadmap
 
 * [x] Fix error handling of files not containing MS2 data
@@ -276,6 +366,7 @@ PASS-CLI implements spectral similarity algorithms optimized for mass spectromet
 * [ ] Chromatogram overlay with similarity mapping
 * [ ] Export to network formats (e.g., GEXF, GraphML)
 * [x] Output visualization scripts for heatmaps and network graphs
+* [ ] Add colorbar option to heatmap generation
 * [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS
 
 ## Tests
