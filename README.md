@@ -294,7 +294,7 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 <tr>
 <td align="center">
 <img src="examples\classic_output_ms1_cosine_heatmap.png" alt="Classic Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>-------------------</strong>
 </td>
 <td align="center">
 <img src="examples\classic_output_ms2_cosine_heatmap.png" alt="Classic Theme" width="200"/>
@@ -302,13 +302,13 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 </td>
 <td align="center">
 <img src="examples\classic_output_ms2_modified-cosine_heatmap.png" alt="Classic Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\darkblue_output_ms1_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 <td align="center">
 <img src="examples\darkblue_output_ms2_cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
@@ -316,13 +316,13 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 </td>
 <td align="center">
 <img src="examples\darkblue_output_ms2_modified-cosine_heatmap.png" alt="Darkblue Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\jet_output_ms1_cosine_heatmap.png" alt="Jet Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 <td align="center">
 <img src="examples\jet_output_ms2_cosine_heatmap.png" alt="Jet Theme" width="200"/>
@@ -330,13 +330,13 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 </td>
 <td align="center">
 <img src="examples\jet_output_ms2_modified-cosine_heatmap.png" alt="Jet Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 </tr>
 <tr>
 <td align="center">
 <img src="examples\viridis_output_ms1_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 <td align="center">
 <img src="examples\viridis_output_ms2_cosine_heatmap.png" alt="Viridis Theme" width="200"/>
@@ -344,7 +344,7 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 </td>
 <td align="center">
 <img src="examples\viridis_output_ms2_modified-cosine_heatmap.png" alt="Viridis Theme" width="200"/>
-<br><strong> </strong>
+<br><strong>>-------------------</</strong>
 </td>
 </tr>
 </table>
