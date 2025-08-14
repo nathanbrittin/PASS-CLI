@@ -1,27 +1,27 @@
-input_path = 'C:\Users\nbrit\Desktop\Rust Practice\pass-cli\tests\data\FeatureFinderMetaboIdent_1_input.mzML'
-output_path = "output.csv"
+input_path = 'examples\sample.mzML'
+output_path = 'examples\viridis_output.csv'
 output_format = "Csv"
 ms1_similarity_metrics = ["cosine"]
 ms2_similarity_metrics = ["cosine", "modified-cosine"]
-ms1_minimum_intensity = 1.0
-ms2_minimum_intensity = 0.0
+ms1_minimum_intensity = 10000.0
+ms2_minimum_intensity = 2000.0
 noise_threshold = 100
 mass_tolerance = 0.01
 heatmap_enabled = true
-image_path = "similarity_heatmap.png"
+image_path = 'examples\viridis_output.png'
 image_format = "Png"
 
 [theme.background]
-r = 255
-g = 255
-b = 255
+r = 20
+g = 20
+b = 20
 
 [theme.low]
-r = 255
-g = 255
-b = 255
+r = 68
+g = 1
+b = 84
 
 [theme.high]
-r = 0
-g = 0
-b = 255
+r = 253
+g = 231
+b = 37

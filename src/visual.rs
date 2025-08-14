@@ -195,7 +195,7 @@ where
     // Temporarily remove legend - use full area for heatmap
     let mut chart = ChartBuilder::on(&root)
         .margin(50)
-        .caption("Similarity Matrix Heatmap", ("sans-serif", 30))
+        // .caption("Similarity Matrix Heatmap", ("sans-serif", 30))
         .build_cartesian_2d(0..n, 0..n)?;
 
     chart.configure_mesh()
