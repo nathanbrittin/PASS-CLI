@@ -405,4 +405,4 @@ Please follow Rust formatting conventions (`cargo fmt`) and include tests where 
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE.md) for details.
