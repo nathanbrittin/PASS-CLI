@@ -30,7 +30,7 @@ pub use similarity::{
 };
 
 mod visual;
-use visual::{plot_similarity_heatmap, ImageFormat, ColorTheme, ThemeName};
+use visual::{plot_similarity_heatmap, ImageFormat, ColorTheme, ThemeName, ChromatogramType};
 
 // Custom error types for better error handling
 #[derive(Debug)]
@@ -101,14 +101,16 @@ fn run_cli() -> Result<()> {
     // Visuals config
     let heatmap_enabled = prompt_generate_heatmap()?;
 
-    // If heatmap is enabled, get all config at once
-    let (image_path, image_format, theme) = if heatmap_enabled {
+    // If heatmap is enabled, get all config at once including chromatogram options
+    let (image_path, image_format, theme, chromatogram_type, enable_smoothing) = if heatmap_enabled {
         let path = prompt_output_image_path()?;
         let format = prompt_image_format()?;
         let theme = prompt_color_theme()?;
-        (path, format, theme)
+        let chrom_type = prompt_chromatogram_type()?;
+        let smoothing = prompt_enable_smoothing()?;
+        (path, format, theme, chrom_type, smoothing)
     } else {
-        ("".to_string(), ImageFormat::Png, ThemeName::Classic.get_theme())
+        ("".to_string(), ImageFormat::Png, ThemeName::Classic.get_theme(), ChromatogramType::BPI, false)
     };
 
     // Print a final confirmation
@@ -124,7 +126,9 @@ fn run_cli() -> Result<()> {
         heatmap_enabled,
         Some(&image_path),
         Some(&image_format),
-        Some(&theme)
+        Some(&theme),
+        Some(chromatogram_type),
+        Some(enable_smoothing)
     );
 
     // Write the configuration to a file
@@ -159,6 +163,7 @@ fn run_cli() -> Result<()> {
         ms1_minimum_intensity, ms2_minimum_intensity,
         noise_threshold, mass_tolerance,
         heatmap_enabled, Some(&image_format), Some(&theme),
+        chromatogram_type, enable_smoothing,
     )?;
 
     let duration = start.elapsed();
@@ -179,6 +184,8 @@ fn process_spectral_data(
     heatmap_enabled: bool,
     image_format: Option<&ImageFormat>,
     theme: Option<&ColorTheme>,
+    chromatogram_type: ChromatogramType,
+    enable_smoothing: bool,
 ) -> Result<()> {
     // Importing the data file with better error handling
     println!("||    Loading spectral data from: {}", input_path);
@@ -294,16 +301,59 @@ fn process_spectral_data(
     if heatmap_enabled {
         println!("||    Creating heatmaps...");
 
+        // Calculate global scan range from all data (MS1 and MS2) for consistent scaling
+        let mut all_scan_ids: Vec<String> = Vec::new();
+        for (_, (scans, _)) in &ms1_results {
+            all_scan_ids.extend(scans.clone());
+        }
+        for (_, (scans, _)) in &ms2_results {
+            all_scan_ids.extend(scans.clone());
+        }
+        
+        let global_scan_range = if !all_scan_ids.is_empty() {
+            let mut min_scan = usize::MAX;
+            let mut max_scan = 0;
+            for scan_id in &all_scan_ids {
+                if let Ok(scan_num) = scan_id.parse::<usize>() {
+                    min_scan = min_scan.min(scan_num);
+                    max_scan = max_scan.max(scan_num);
+                }
+            }
+            Some((min_scan, max_scan))
+        } else {
+            None
+        };
+        
+        // println!("||    Global scan range for consistent heatmap scaling: {:?}", global_scan_range);
+
         for (metric, (ms1_scans, ms1_mat)) in &ms1_results {
             let ext = get_extension(image_format.unwrap_or(&ImageFormat::Png));
             let file_path = output_path.replace(".csv", &format!("_ms1_{}_heatmap.{}", metric, ext));
 
+            // Extract MS1 chromatogram data based on selected type
+            let ms1_chromatogram: Vec<f32> = ms1_scans
+                .iter()
+                .map(|scan_id| {
+                    spec_metadata.get(scan_id)
+                        .map(|meta| match chromatogram_type {
+                            ChromatogramType::BPI => meta.base_peak_intensity,
+                            ChromatogramType::TIC => meta.total_ion_current,
+                        })
+                        .unwrap_or(0.0)
+                })
+                .collect();
+
             plot_similarity_heatmap(
                 ms1_scans,
                 ms1_mat,
+                &ms1_chromatogram,
+                chromatogram_type,
+                enable_smoothing,
                 &file_path,
                 image_format.unwrap_or(&ImageFormat::Png),
-                theme.unwrap_or(&ThemeName::Classic.get_theme())
+                theme.unwrap_or(&ThemeName::Classic.get_theme()),
+                global_scan_range,
+                None // MS1 uses its own scan IDs directly
             )
             .map_err(|e| CliError::FileError(format!("**Failed to create MS1 {} heatmap: {}**", metric, e)))?;
             println!("||    Created MS1 {} heatmap: {}", metric, file_path);
@@ -313,12 +363,39 @@ fn process_spectral_data(
             let ext = get_extension(image_format.unwrap_or(&ImageFormat::Png));
             let file_path = output_path.replace(".csv", &format!("_ms2_{}_heatmap.{}", metric, ext));
 
+            // Use the SAME MS1 chromatogram data and scan IDs directly 
+            // This ensures identical chromatogram representation across all heatmaps
+            let (ms1_scan_ids, ms1_chromatogram): (Vec<String>, Vec<f32>) = ms1_results
+                .values()
+                .next() // Take any MS1 result (they all have the same scan IDs)
+                .map(|(ms1_scans, _)| {
+                    let scan_ids = ms1_scans.clone();
+                    let chromatogram = ms1_scans
+                        .iter()
+                        .map(|scan_id| {
+                            spec_metadata.get(scan_id)
+                                .map(|meta| match chromatogram_type {
+                                    ChromatogramType::BPI => meta.base_peak_intensity,
+                                    ChromatogramType::TIC => meta.total_ion_current,
+                                })
+                                .unwrap_or(0.0)
+                        })
+                        .collect();
+                    (scan_ids, chromatogram)
+                })
+                .unwrap_or_default();
+
             plot_similarity_heatmap(
                 ms2_scans,
                 ms2_mat,
+                &ms1_chromatogram, // Use MS1 chromatogram data
+                chromatogram_type,
+                enable_smoothing,
                 &file_path,
                 image_format.unwrap_or(&ImageFormat::Png),
-                theme.unwrap_or(&ThemeName::Classic.get_theme())
+                theme.unwrap_or(&ThemeName::Classic.get_theme()),
+                global_scan_range,
+                Some(ms1_scan_ids) // Pass MS1 scan IDs for proper chromatogram mapping
             )
             .map_err(|e| CliError::FileError(format!("**Failed to create MS2 {} heatmap: {}**", metric, e)))?;
             println!("||    Created MS2 {} heatmap: {}", metric, file_path);
@@ -342,6 +419,8 @@ pub fn print_configuration(
     image_path: Option<&str>,
     image_format: Option<&ImageFormat>,
     theme: Option<&ColorTheme>,
+    chromatogram_type: Option<ChromatogramType>,
+    enable_smoothing: Option<bool>,
 ) {
     println!("----------------------------------------------------------------------------------------------");
     println!(" CONFIGURATION SUMMARY");
@@ -364,6 +443,12 @@ pub fn print_configuration(
         }
         if let Some(format) = image_format {
             println!("||    Heatmap image format: {:?}", format);
+        }
+        if let Some(chrom_type) = chromatogram_type {
+            println!("||    Chromatogram type: {}", chrom_type.as_str());
+        }
+        if let Some(smoothing) = enable_smoothing {
+            println!("||    Chromatogram smoothing: {}", if smoothing { "ENABLED" } else { "DISABLED" });
         }
         if let Some(t) = theme {
             println!("||    Color theme:");
@@ -748,6 +833,54 @@ fn prompt_output_image_path() -> Result<String> {
     } else {
         input
     })
+}
+
+fn prompt_chromatogram_type() -> Result<ChromatogramType> {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        println!("||    Select chromatogram data type to display on heatmap axes:");
+        println!("||    Available options: {}", ChromatogramType::list().join(", "));
+        println!("||    (BPI = Base Peak Intensity, TIC = Total Ion Current)");
+        print!("||    Chromatogram type (default: BPI): ");
+        io::stdout().flush()?;
+
+        let input = read_input_line()?;
+        let choice = if input.is_empty() { "BPI" } else { &input };
+
+        if let Some(chrom_type) = ChromatogramType::from_str(choice) {
+            println!("||     Selected chromatogram type: {}", chrom_type.as_str());
+            return Ok(chrom_type);
+        } else {
+            println!("||     Invalid selection. Please choose from: {}", ChromatogramType::list().join(", "));
+        }
+    }
+}
+
+fn prompt_enable_smoothing() -> Result<bool> {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        println!("||    Enable chromatogram smoothing to reduce noise?");
+        println!("||    Smoothing uses a 3-point moving average to create cleaner chromatograms.");
+        print!("||    Enable smoothing? (y/n, default: y): ");
+        io::stdout().flush()?;
+
+        let input = read_input_line()?;
+        let choice = if input.is_empty() { "y" } else { &input };
+
+        match choice.trim().to_lowercase().as_str() {
+            "y" | "yes" | "true" | "1" => {
+                println!("||     Smoothing enabled");
+                return Ok(true);
+            }
+            "n" | "no" | "false" | "0" => {
+                println!("||     Smoothing disabled");
+                return Ok(false);
+            }
+            _ => {
+                println!("||     Invalid input. Please enter 'y' for yes or 'n' for no.");
+            }
+        }
+    }
 }
 
 fn get_extension(format: &ImageFormat) -> &'static str {

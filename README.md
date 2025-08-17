@@ -377,6 +377,7 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 * [x] Output visualization scripts for heatmaps and network graphs
 * [ ] Add colorbar option to heatmap generation
 * [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS
+* [ ] Add support for config or yaml files to expedite repeated analyses
 
 ## Tests
 
