@@ -137,7 +137,7 @@ or
 
 ## Usage
 
-PASS-CLI features an interactive, prompt-driven workflow to simplify operation for users who may be unfamiliar with complex command-line flags or syntax. On launch, the tool will guide you through each configuration step—there’s no need to remember options or refer back to documentation mid-run.
+PASS-CLI features an interactive, prompt-driven workflow to simplify operation for users who may be unfamiliar with complex command-line flags or syntax. On launch, the tool will guide you through each configuration step, there’s no need to remember options or refer back to documentation mid-run.
 
 To get started, just execute the program:
 
@@ -192,7 +192,7 @@ pass-cli.exe
 # Continue with processing? [Y/n]: Y
 ```
 
-Inspect `examples/test_similarity.csv`—it should look like:
+Inspect `examples/test_similarity.csv`, it should look like:
 
 ```csv
   0,      2,        3
