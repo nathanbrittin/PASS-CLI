@@ -21,6 +21,7 @@ pub use similarity::{
     compute_pairwise_similarity_matrix_sparse, 
     prune_background_columns, 
     prune_background_bins_sparse, 
+    prune_background_similarity_regions,
     prune_unused_bins, 
     spectrum_to_dense_vec, 
     compute_sparse_vec_map, 
@@ -100,6 +101,9 @@ fn run_cli() -> Result<()> {
 
     // Visuals config
     let heatmap_enabled = prompt_generate_heatmap()?;
+    
+    // Background pruning config
+    let (enable_pruning, similarity_threshold, min_background_fraction) = prompt_enable_background_pruning()?;
 
     // If heatmap is enabled, get all config at once including chromatogram options
     let (image_path, image_format, theme, chromatogram_type, enable_smoothing) = if heatmap_enabled {
@@ -164,6 +168,7 @@ fn run_cli() -> Result<()> {
         noise_threshold, mass_tolerance,
         heatmap_enabled, Some(&image_format), Some(&theme),
         chromatogram_type, enable_smoothing,
+        enable_pruning, similarity_threshold, min_background_fraction
     )?;
 
     let duration = start.elapsed();
@@ -186,6 +191,9 @@ fn process_spectral_data(
     theme: Option<&ColorTheme>,
     chromatogram_type: ChromatogramType,
     enable_smoothing: bool,
+    enable_pruning: bool,
+    similarity_threshold: f64,
+    min_background_fraction: f64
 ) -> Result<()> {
     // Importing the data file with better error handling
     println!("||    Loading spectral data from: {}", input_path);
@@ -198,6 +206,8 @@ fn process_spectral_data(
     }
     
     println!("||    Parsed {} spectra successfully.", spec_map.len());
+
+    // Future: Improved data processing and filtering.
 
     // Filter to only MS1 and MS2
     let ms1_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 1);
@@ -238,9 +248,9 @@ fn process_spectral_data(
 
     // Filter background signals
     println!("||    Pruning background signals...");
-    prune_background_bins_sparse(&mut ms1_bits_map, 0.5)
+    prune_background_bins_sparse(&mut ms1_bits_map, 0.3)
         .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS1 background bins: {:?}**", e)))?;
-    prune_background_bins_sparse(&mut ms2_bits_map, 0.5)
+    prune_background_bins_sparse(&mut ms2_bits_map, 0.3)
         .map_err(|e| CliError::ProcessingError(format!("**Failed to prune MS2 background bins: {:?}**", e)))?;
     println!("||    ✔ Pruned background signals successfully.");
     println!("------------------------------------------------------------------------------");
@@ -280,6 +290,46 @@ fn process_spectral_data(
     }
     println!("||    ✔ Computed MS2 pairwise similarity matrices successfully.");
     println!("------------------------------------------------------------------------------");
+
+    // Apply post-similarity background pruning if enabled
+    if enable_pruning {
+        println!("||    Applying background pruning to similarity matrices...");
+        
+        // Prune MS1 results
+        let mut total_ms1_pruned = 0;
+        for (metric, (_, ms1_mat)) in ms1_results.iter_mut() {
+            match prune_background_similarity_regions(ms1_mat, similarity_threshold, min_background_fraction) {
+                Ok(pruned_count) => {
+                    total_ms1_pruned += pruned_count;
+                    if pruned_count > 0 {
+                        println!("||    Zeroed {} background spectra in MS1 {} matrix", pruned_count, metric);
+                    }
+                },
+                Err(e) => println!("||    Warning: Failed to prune MS1 {} matrix: {:?}", metric, e),
+            }
+        }
+        
+        // Prune MS2 results
+        let mut total_ms2_pruned = 0;
+        for (metric, (_, ms2_mat)) in ms2_results.iter_mut() {
+            match prune_background_similarity_regions(ms2_mat, similarity_threshold, min_background_fraction) {
+                Ok(pruned_count) => {
+                    total_ms2_pruned += pruned_count;
+                    if pruned_count > 0 {
+                        println!("||    Zeroed {} background spectra in MS2 {} matrix", pruned_count, metric);
+                    }
+                },
+                Err(e) => println!("||    Warning: Failed to prune MS2 {} matrix: {:?}", metric, e),
+            }
+        }
+        
+        if total_ms1_pruned > 0 || total_ms2_pruned > 0 {
+            println!("||    ✔ Background pruning complete. Total zeroed: {} MS1, {} MS2 spectra", total_ms1_pruned, total_ms2_pruned);
+        } else {
+            println!("||    No background regions detected with current thresholds");
+        }
+        println!("------------------------------------------------------------------------------");
+    }
 
     // Export results
     println!("||    Exporting similarity matrices...");
@@ -607,7 +657,7 @@ fn prompt_output_path() -> Result<(String, OutputFormat)> {
         let path = if input.is_empty() { 
             "output.csv".to_string() 
         } else { 
-            input
+            input.clone()
         };
 
         // For the default case (output.csv), skip directory validation since it goes to current directory
@@ -617,6 +667,9 @@ fn prompt_output_path() -> Result<(String, OutputFormat)> {
             println!("||     Output format: csv");
             return Ok((path, OutputFormat::Csv));
         }
+
+        // Trim quotation marks
+        let path = input.trim_matches('"').trim_matches('\'');
 
         // Check if the output directory exists and is writable for non-default paths
         if let Some(parent) = Path::new(&path).parent() {
@@ -633,7 +686,7 @@ fn prompt_output_path() -> Result<(String, OutputFormat)> {
             clear_current_line();
             println!("||     Output file: {}", path);
             println!("||     Output format: {}", ft);
-            return Ok((path, ft));
+            return Ok((path.to_string(), ft));
         } else {
             clear_current_line();
             println!("||    Error: Could not determine output format. Using CSV as default.");
@@ -852,6 +905,66 @@ fn prompt_chromatogram_type() -> Result<ChromatogramType> {
             return Ok(chrom_type);
         } else {
             println!("||     Invalid selection. Please choose from: {}", ChromatogramType::list().join(", "));
+        }
+    }
+}
+
+fn prompt_enable_background_pruning() -> Result<(bool, f64, f64)> {
+    loop {
+        println!("----------------------------------------------------------------------------------------------");
+        println!("||    Enable post-similarity background pruning?");
+        println!("||    This removes background noise regions that have high similarity to many other spectra.");
+        print!("||    Enable background pruning? (y/n, default: n): ");
+        io::stdout().flush()?;
+
+        let input = read_input_line()?;
+        let choice = if input.is_empty() { "n" } else { &input };
+
+        match choice.trim().to_lowercase().as_str() {
+            "y" | "yes" | "true" | "1" => {
+                println!("||     Background pruning enabled");
+                
+                // Get similarity threshold
+                let similarity_threshold = loop {
+                    print!("||    Similarity threshold for background detection (0.0-1.0, default: 0.7): ");
+                    io::stdout().flush()?;
+                    let input = read_input_line()?;
+                    let threshold_str = if input.is_empty() { "0.7" } else { &input };
+                    
+                    match threshold_str.parse::<f64>() {
+                        Ok(val) if val >= 0.0 && val <= 1.0 => {
+                            println!("||     Similarity threshold set to: {}", val);
+                            break val;
+                        }
+                        _ => println!("||     Invalid threshold. Please enter a value between 0.0 and 1.0."),
+                    }
+                };
+                
+                // Get minimum background fraction  
+                let min_background_fraction = loop {
+                    print!("||    Minimum fraction of high similarities for background (0.0-1.0, default: 0.8): ");
+                    io::stdout().flush()?;
+                    let input = read_input_line()?;
+                    let fraction_str = if input.is_empty() { "0.8" } else { &input };
+                    
+                    match fraction_str.parse::<f64>() {
+                        Ok(val) if val >= 0.0 && val <= 1.0 => {
+                            println!("||     Background fraction set to: {}", val);
+                            break val;
+                        }
+                        _ => println!("||     Invalid fraction. Please enter a value between 0.0 and 1.0."),
+                    }
+                };
+                
+                return Ok((true, similarity_threshold, min_background_fraction));
+            }
+            "n" | "no" | "false" | "0" => {
+                println!("||     Background pruning disabled");
+                return Ok((false, 0.7, 0.8)); // Default values, not used
+            }
+            _ => {
+                println!("||     Invalid input. Please enter 'y' for yes or 'n' for no.");
+            }
         }
     }
 }

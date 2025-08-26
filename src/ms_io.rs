@@ -14,6 +14,13 @@ use flate2::read::ZlibDecoder;
 use csv::WriterBuilder;
 use ndarray::{Array2, Axis};
 
+
+// -----------------
+// This section contains data structures:
+// - Peak: A struct representing a single m/z-intensity pair. This is used to store the mz and int data.
+// - SpectrumMetadata: A struct containing metadata for a single spectrum.
+// -----------------
+
 /// A single m/z-intensity pair.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Peak {
@@ -35,6 +42,14 @@ pub struct SpectrumMetadata {
     pub selected_ion: f32,
     pub charge: u8
 }
+
+
+// -------------
+// This section contains the functions that are necessary for importing mzML files and parsing their contents.
+// - import_mzml: Imports mzML files and extracts spectral data.
+// - decode_mz_array: Decodes base64-encoded m/z arrays using the specified bit depth and little endian compression.
+// - decode_intensity_array: Decodes base64-encoded intensity arrays using the specified bit depth and little endian compression.
+// -------------
 
 /// Parses an mzML XML file, returning a map from scan ID to its peaks.
 /// Returns Err if any spectrum has mismatched m/z vs intensity lengths.
@@ -229,6 +244,46 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
     }
 }
 
+/// Filter a map of scan IDs to their corresponding peak data by MS level.
+///
+/// # Arguments
+///
+/// * `map` - The map from scan IDs to their peak data.
+/// * `map_metadata` - The map from scan IDs to their corresponding metadata.
+/// * `ms_level` - The desired MS level to filter by.
+///
+/// # Returns
+///
+/// A new `HashMap` where each key-value pair is a filtered version of the
+/// input map. Only scans with the specified MS level are included in the
+/// output.
+pub fn filter_by_ms_level(
+    map: HashMap<String, Vec<Peak>>, 
+    map_metadata: HashMap<String, SpectrumMetadata>, 
+    ms_level: u8
+) -> HashMap<String, Vec<Peak>> {
+    let mut filtered_map = HashMap::new();
+    let mut missing_metadata_count = 0;
+    
+    for (scan_id, peaks) in map {
+        if let Some(metadata) = map_metadata.get(&scan_id) {
+            if metadata.ms_level == ms_level {
+                filtered_map.insert(scan_id, peaks);
+            }
+        } else {
+            missing_metadata_count += 1;
+            // Log warning but continue processing
+            eprintln!("**Warning: No metadata found for scan ID '{}'**", scan_id);
+        }
+    }
+    
+    if missing_metadata_count > 0 {
+        eprintln!("**Warning: {} scans were missing metadata and were excluded from filtering**", missing_metadata_count);
+    }
+    
+    filtered_map
+}
+
 fn decode_mz_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<Vec<f32>, String> {
     // 1) Base64 decode with better error handling
     let decoded = general_purpose::STANDARD
@@ -335,6 +390,18 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
     Ok(floats)
 }
 
+// -----------------
+// This section defined the function used for processing the mass spectrometry data.
+// 
+// -----------------
+
+
+
+// -----------------
+// This section defines the structs used for the reading and writing of the similarity matrix.
+// - OutputFormat: Supported output formats for the similarity matrix. Options include CSV, TSV, and JSON.
+// -----------------
+
 /// Supported output formats for the similarity matrix.
 #[derive(Clone, Copy, serde::Serialize, serde::Deserialize, Debug)]
 pub enum OutputFormat {
@@ -342,6 +409,12 @@ pub enum OutputFormat {
     Tsv,
     Json,
 }
+
+
+// -----------------
+// This section defines the functions used for the reading and writing of the similarity matrix.
+// - write_similarity_matrix: Write the similarity matrix to a file in CSV, TSV, or JSON.
+// -----------------
 
 /// Write the similarity matrix to a file in CSV, TSV, or JSON.
 ///
@@ -441,45 +514,6 @@ pub fn write_similarity_matrix<P: AsRef<Path>>(
     Ok(())
 }
 
-/// Filter a map of scan IDs to their corresponding peak data by MS level.
-///
-/// # Arguments
-///
-/// * `map` - The map from scan IDs to their peak data.
-/// * `map_metadata` - The map from scan IDs to their corresponding metadata.
-/// * `ms_level` - The desired MS level to filter by.
-///
-/// # Returns
-///
-/// A new `HashMap` where each key-value pair is a filtered version of the
-/// input map. Only scans with the specified MS level are included in the
-/// output.
-pub fn filter_by_ms_level(
-    map: HashMap<String, Vec<Peak>>, 
-    map_metadata: HashMap<String, SpectrumMetadata>, 
-    ms_level: u8
-) -> HashMap<String, Vec<Peak>> {
-    let mut filtered_map = HashMap::new();
-    let mut missing_metadata_count = 0;
-    
-    for (scan_id, peaks) in map {
-        if let Some(metadata) = map_metadata.get(&scan_id) {
-            if metadata.ms_level == ms_level {
-                filtered_map.insert(scan_id, peaks);
-            }
-        } else {
-            missing_metadata_count += 1;
-            // Log warning but continue processing
-            eprintln!("**Warning: No metadata found for scan ID '{}'**", scan_id);
-        }
-    }
-    
-    if missing_metadata_count > 0 {
-        eprintln!("**Warning: {} scans were missing metadata and were excluded from filtering**", missing_metadata_count);
-    }
-    
-    filtered_map
-}
 
 #[cfg(test)]
 mod tests {

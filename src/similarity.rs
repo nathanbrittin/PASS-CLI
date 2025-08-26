@@ -790,6 +790,82 @@ pub fn prune_background_bins_sparse(
     Ok(())
 }
 
+/// Prune background regions from similarity matrices by zeroing them out
+/// 
+/// This function identifies background regions by finding spectra that have consistently 
+/// high similarity (indicating they are background/noise regions rather than meaningful signals).
+/// These regions are then zeroed out in the similarity matrix while preserving matrix dimensions.
+///
+/// # Arguments
+/// * `similarity_matrix` - Mutable 2D similarity matrix to be pruned
+/// * `similarity_threshold` - Minimum average similarity for a spectrum to be considered background (e.g., 0.7)
+/// * `min_background_fraction` - Minimum fraction of high-similarity comparisons needed to mark as background (e.g., 0.8)
+///
+/// # Returns
+/// * `Ok(usize)` - Number of background spectra zeroed out
+/// * `Err(SpectrumProcessingError)` - If parameters are invalid
+pub fn prune_background_similarity_regions(
+    similarity_matrix: &mut Array2<f32>,
+    similarity_threshold: f64,
+    min_background_fraction: f64,
+) -> Result<usize> {
+    if similarity_threshold < 0.0 || similarity_threshold > 1.0 {
+        return Err(SpectrumProcessingError::InvalidParameters(
+            "**similarity_threshold must be between 0.0 and 1.0**".to_string()
+        ));
+    }
+    
+    if min_background_fraction < 0.0 || min_background_fraction > 1.0 {
+        return Err(SpectrumProcessingError::InvalidParameters(
+            "**min_background_fraction must be between 0.0 and 1.0**".to_string()
+        ));
+    }
+    
+    let n_spectra = similarity_matrix.nrows();
+    if n_spectra == 0 || similarity_matrix.ncols() != n_spectra {
+        return Ok(0);
+    }
+    
+    // Identify background spectra based on high average similarity to other spectra
+    let mut background_indices = Vec::new();
+    
+    for i in 0..n_spectra {
+        let row = similarity_matrix.row(i);
+        
+        // Count how many comparisons exceed the similarity threshold (excluding self-comparison)
+        let high_similarity_count = row.iter()
+            .enumerate()
+            .filter(|(j, &sim)| *j != i && sim >= similarity_threshold as f32)
+            .count();
+        
+        let fraction_high_similarity = high_similarity_count as f64 / (n_spectra - 1) as f64;
+        
+        // Mark as background if it has high similarity to a large fraction of other spectra
+        if fraction_high_similarity >= min_background_fraction {
+            background_indices.push(i);
+        }
+    }
+    
+    if background_indices.is_empty() {
+        return Ok(0);
+    }
+    
+    // Zero out background rows and columns in the similarity matrix
+    for &idx in &background_indices {
+        // Zero out the entire row
+        for j in 0..n_spectra {
+            similarity_matrix[(idx, j)] = 0.0;
+        }
+        
+        // Zero out the entire column
+        for i in 0..n_spectra {
+            similarity_matrix[(i, idx)] = 0.0;
+        }
+    }
+    
+    Ok(background_indices.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

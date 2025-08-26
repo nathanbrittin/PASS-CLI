@@ -369,15 +369,17 @@ PASS-CLI includes 13 carefully designed color themes optimized for scientific vi
 
 ## Roadmap
 
-* [x] Fix error handling of files not containing MS2 data
-* [x] Implement the modified cosine score for effective comaprison of MS2 spectra
-* [ ] Preprocessing filters (e.g., baseline subtraction, feature extraction)
-* [ ] Chromatogram overlay with similarity mapping
-* [ ] Export to network formats (e.g., GEXF, GraphML)
-* [x] Output visualization scripts for heatmaps and network graphs
-* [ ] Add colorbar option to heatmap generation
-* [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS
-* [ ] Add support for config or yaml files to expedite repeated analyses
+* [x] Fix error handling of files not containing MS2 data.
+* [x] Implement the modified cosine score for effective comparison of MS2 spectra.
+* [ ] Implement better mass spectrometry data processing for feature detection and background subtraction.
+* [ ] Add optional retention time (RT) filter to focus on spectra within a specific RT window.
+* [ ] Preprocessing filters (e.g., baseline subtraction, feature extraction).
+* [x] Chromatogram overlay with similarity mapping.
+* [ ] Export to network formats (e.g., GEXF, GraphML).
+* [x] Output visualization scripts for heatmaps and network graphs.
+* [ ] Add colorbar option to heatmap generation.
+* [ ] Utilize ML/AI based comparative tools such as MS2DeepScore/Spec2Vec/DeepMASS/DreaMS.
+* [ ] Add support for config or yaml files to expedite repeated analyses.
 
 ## Tests
 
