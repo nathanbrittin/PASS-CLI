@@ -6,12 +6,31 @@ use crate::similarity::spectrum_to_dense_vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormMethod { #[allow(dead_code)] TIC, PQN }
 
+/// How to threshold peak intensities before similarity computation
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub enum ThresholdMethod {
+    Absolute(f32),
+    PercentBasePeak(f32),  // fraction in (0.0, 1.0]
+    TopN(usize),
+}
+
+impl ThresholdMethod {
+    /// Absolute floor for internal dense-vector helpers (PQN/background detection).
+    /// For adaptive methods, returns 0.0 because peaks are already gated.
+    pub fn dense_floor(&self) -> f32 {
+        match self {
+            ThresholdMethod::Absolute(v) => *v,
+            _ => 0.0,
+        }
+    }
+}
+
 /// Config for the post-import processing
 #[derive(Debug, Clone)]
 pub struct ProcessingConfig {
     pub bin_width: f32,           // use your mass_tolerance
     pub max_mz: f32,              // computed from MS1
-    pub minimum_intensity: f32,   // same threshold you use for binning
+    pub threshold: ThresholdMethod,  // replaces minimum_intensity
     pub snr_min: f32,             // e.g., 5.0 (MAD-based S/N)
     pub norm: NormMethod,         // TIC or PQN
     // Optional blank filtering (bin-level background removal)
@@ -75,14 +94,48 @@ pub fn preprocess_after_import(
 
     for (scan, peaks) in ms1_spec_map {
         let (_thr, noise) = mad_threshold(peaks);
-        let snr_floor = cfg.snr_min.max(0.0);
-        // We treat SNR >= cfg.snr_min as keep. Practical proxy: intensity >= snr_min * noise
-        let sn_floor = snr_floor * noise;
+        let sn_floor = cfg.snr_min.max(0.0) * noise;
 
-        let filtered: Vec<Peak> = peaks.iter()
+        // Phase A: MAD/SNR floor
+        let snr_passed: Vec<Peak> = peaks.iter()
             .cloned()
-            .filter(|p| p.intensity.is_finite() && p.intensity >= sn_floor && p.intensity >= cfg.minimum_intensity)
+            .filter(|p| p.intensity.is_finite() && p.intensity >= sn_floor)
             .collect();
+
+        // Phase B: adaptive intensity gate
+        let filtered: Vec<Peak> = match cfg.threshold {
+            ThresholdMethod::Absolute(min_int) => snr_passed.into_iter()
+                .filter(|p| p.intensity >= min_int)
+                .collect(),
+
+            ThresholdMethod::PercentBasePeak(fraction) => {
+                let base_peak = snr_passed.iter()
+                    .map(|p| p.intensity)
+                    .fold(0.0_f32, f32::max);
+                if base_peak <= 0.0 {
+                    Vec::new()
+                } else {
+                    let pbp_floor = base_peak * fraction;
+                    snr_passed.into_iter()
+                        .filter(|p| p.intensity >= pbp_floor)
+                        .collect()
+                }
+            }
+
+            ThresholdMethod::TopN(n) => {
+                if n == 0 {
+                    Vec::new()
+                } else {
+                    let mut ranked = snr_passed;
+                    ranked.sort_unstable_by(|a, b| {
+                        b.intensity.partial_cmp(&a.intensity)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    ranked.truncate(n);
+                    ranked
+                }
+            }
+        };
 
         removed_noise += peaks.len().saturating_sub(filtered.len());
         kept += filtered.len();
@@ -91,38 +144,35 @@ pub fn preprocess_after_import(
 
     // --- 2. Optional blank-based background bin removal (bin logic uses unnormalized dense vectors) ---
     let mut background_bins: HashSet<usize> = HashSet::new();
+    let mut removed_bg_count = 0usize;
     if let Some(blank_ids) = blank_scan_ids {
         if !blank_ids.is_empty() {
             background_bins = detect_background_bins(
-                &cleaned, 
-                blank_ids, 
-                cfg.bin_width, 
-                cfg.max_mz, 
-                cfg.minimum_intensity,
-                cfg.blank_ratio_max, 
+                &cleaned,
+                blank_ids,
+                cfg.bin_width,
+                cfg.max_mz,
+                cfg.threshold.dense_floor(),
+                cfg.blank_ratio_max,
                 cfg.sample_over_blank_min
             );
-            // remove peaks that fall into background bins
-            let mut removed_bg = 0usize;
+            // remove peaks that fall into background bins; count removals before modifying
             for (_scan, peaks) in cleaned.iter_mut() {
                 peaks.retain(|p| {
                     let bin = (p.mz / cfg.bin_width).floor() as isize;
                     let keep = bin >= 0 && !background_bins.contains(&(bin as usize));
-                    if !keep { removed_bg += 1; }
+                    if !keep { removed_bg_count += 1; }
                     keep
                 });
             }
-            removed_noise += 0; // keep separation in stats
             kept = cleaned.values().map(|v| v.len()).sum();
-            // stash count in stats later
         }
     }
-    let removed_bg_count = cleaned.values().map(|v| v.len()).sum::<usize>().saturating_sub(kept);
 
     // --- 3. Compute normalization factors on MS1 ---
     let scale_factors = match cfg.norm {
         NormMethod::TIC => tic_norm_factors(&cleaned, metadata),
-        NormMethod::PQN => pqn_norm_factors(&cleaned, cfg.bin_width, cfg.max_mz, cfg.minimum_intensity),
+        NormMethod::PQN => pqn_norm_factors(&cleaned, cfg.bin_width, cfg.max_mz, cfg.threshold.dense_floor()),
     };
 
     // Apply factors to MS1 now (we’ll apply to MS2 in main.rs using the same factors)
@@ -198,11 +248,20 @@ fn pqn_norm_factors(
     if dense.is_empty() { return HashMap::new(); }
 
     let n_bins = dense.values().next().map(|v| v.len()).unwrap_or(0);
-    // reference spectrum = median across scans per bin
+    // reference spectrum = median across scans per bin.
+    // Accumulate bin values in a single row-major pass (cache-friendly) rather than
+    // accessing column b of every scan vector in a nested loop.
+    let mut bin_vals: Vec<Vec<f32>> = vec![Vec::new(); n_bins];
+    for v in dense.values() {
+        for (b, &x) in v.iter().enumerate() {
+            if x.is_finite() && x > 0.0 {
+                bin_vals[b].push(x);
+            }
+        }
+    }
     let mut ref_spec = vec![0.0_f32; n_bins];
-    for b in 0..n_bins {
-        let bin_vals: Vec<f32> = dense.values().map(|v| v[b]).filter(|x| x.is_finite() && *x>0.0).collect();
-        ref_spec[b] = if bin_vals.is_empty() { 0.0 } else { median(bin_vals) };
+    for (b, vals) in bin_vals.into_iter().enumerate() {
+        ref_spec[b] = if vals.is_empty() { 0.0 } else { median(vals) };
     }
 
     // compute factor for each scan
@@ -227,12 +286,15 @@ fn detect_background_bins(
     bin_width: f32, max_mz: f32, min_intensity: f32,
     blank_ratio_max: f32, sample_over_blank_min: f32
 ) -> HashSet<usize> {
+    // Build O(1) lookup set for blank scan IDs
+    let blank_set: HashSet<&String> = blank_ids.iter().collect();
+
     // split dense maps
     let mut blank_vecs: Vec<Vec<f32>> = Vec::new();
     let mut sample_vecs: Vec<Vec<f32>> = Vec::new();
     for (scan, peaks) in cleaned_ms1 {
         if let Ok(v) = spectrum_to_dense_vec(peaks, bin_width, max_mz, min_intensity) {
-            if blank_ids.contains(scan) {
+            if blank_set.contains(scan) {
                 blank_vecs.push(v);
             } else {
                 sample_vecs.push(v);
@@ -279,4 +341,41 @@ pub fn apply_scale_factors(
 ) -> HashMap<String, Vec<Peak>> {
     apply_scale_factors_in_place(&mut spec_map, factors);
     spec_map
+}
+
+/// Apply SNR + adaptive threshold to a spec map without normalization (for MS2).
+pub fn apply_threshold_to_spec_map(
+    spec_map: HashMap<String, Vec<Peak>>,
+    method: ThresholdMethod,
+    snr_min: f32,
+) -> HashMap<String, Vec<Peak>> {
+    spec_map.into_iter().map(|(scan, peaks)| {
+        let (_thr, noise) = mad_threshold(&peaks);
+        let sn_floor = snr_min.max(0.0) * noise;
+
+        let snr_passed: Vec<Peak> = peaks.into_iter()
+            .filter(|p| p.intensity.is_finite() && p.intensity >= sn_floor)
+            .collect();
+
+        let filtered: Vec<Peak> = match method {
+            ThresholdMethod::Absolute(min_int) => snr_passed.into_iter()
+                .filter(|p| p.intensity >= min_int).collect(),
+            ThresholdMethod::PercentBasePeak(fraction) => {
+                let base_peak = snr_passed.iter().map(|p| p.intensity).fold(0.0_f32, f32::max);
+                if base_peak <= 0.0 { Vec::new() } else {
+                    let floor = base_peak * fraction;
+                    snr_passed.into_iter().filter(|p| p.intensity >= floor).collect()
+                }
+            }
+            ThresholdMethod::TopN(n) => {
+                if n == 0 { return (scan, Vec::new()); }
+                let mut ranked = snr_passed;
+                ranked.sort_unstable_by(|a, b| b.intensity.partial_cmp(&a.intensity)
+                    .unwrap_or(std::cmp::Ordering::Equal));
+                ranked.truncate(n);
+                ranked
+            }
+        };
+        (scan, filtered)
+    }).collect()
 }

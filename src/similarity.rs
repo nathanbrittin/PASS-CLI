@@ -27,7 +27,7 @@ impl fmt::Display for SpectrumProcessingError {
             SpectrumProcessingError::InvalidParameters(msg) => write!(f, "**Invalid parameters: {}**", msg),
             SpectrumProcessingError::EmptyInput(msg) => write!(f, "**Empty input: {}**", msg),
             SpectrumProcessingError::ParseError(msg) => write!(f, "**Parse error: {}**", msg),
-            SpectrumProcessingError::InvalidMsLevel(msg) => write!(f, "**nvalid MS level: {}**", msg),
+            SpectrumProcessingError::InvalidMsLevel(msg) => write!(f, "**Invalid MS level: {}**", msg),
             SpectrumProcessingError::MatrixDimensionMismatch(msg) => write!(f, "**Matrix dimension mismatch: {}**", msg),
             SpectrumProcessingError::NumericalError(msg) => write!(f, "**Numerical error: {}**", msg),
         }
@@ -202,18 +202,19 @@ pub fn spectrum_to_dense_vec(
 }
 
 /// Computes the cosine similarity between two vectors.
-/// 
+///
 /// The cosine similarity is a measure of similarity between two non-zero vectors of an inner product space.
 /// It is calculated as the dot product of the vectors divided by the product of their magnitudes.
-/// 
+///
 /// ### Arguments
-/// 
+///
 /// * `v1` - A slice of f32 values representing the first vector.
 /// * `v2` - A slice of f32 values representing the second vector.
-/// 
+///
 /// ### Returns
-/// 
+///
 /// * A Result<f32> value representing the cosine similarity between the two vectors or an error.
+#[allow(dead_code)]
 pub fn cosine_similarity(v1: &[f32], v2: &[f32]) -> Result<f32> {
     // Check if vectors are the same length
     if v1.len() != v2.len() {
@@ -268,7 +269,150 @@ pub fn cosine_similarity_sparse(a: &SparseVec, b: &SparseVec) -> Result<f32> {
     sparse_dot(a, b)
 }
 
+/// Weighted cosine similarity using mz² × intensity^0.5 weighting (MassBank standard).
+///
+/// Emphasises higher-mass fragment ions, which tend to be more structurally
+/// diagnostic and less affected by noise.  Using the L2-normalised intensities
+/// stored in `SparseVec` gives the same cosine angle as using the original
+/// intensities (the L2 scalar cancels in the ratio).
+fn weighted_cosine_sparse(a: &SparseVec, b: &SparseVec, bin_width: f32) -> Result<f32> {
+    // Re-weight each entry: w = mz² × sqrt(intensity)
+    let reweight = |sv: &SparseVec| -> Vec<(usize, f32)> {
+        sv.iter().map(|&(bin, intensity)| {
+            let mz = bin as f32 * bin_width;
+            (bin, mz * mz * intensity.max(0.0).sqrt())
+        }).collect()
+    };
+
+    let wa = reweight(a);
+    let wb = reweight(b);
+
+    let dot = sparse_dot(&wa, &wb)?;
+    let norm_a: f32 = wa.iter().map(|(_, w)| w * w).sum::<f32>().sqrt();
+    let norm_b: f32 = wb.iter().map(|(_, w)| w * w).sum::<f32>().sqrt();
+
+    if norm_a <= 0.0 || norm_b <= 0.0 {
+        return Ok(0.0);
+    }
+    Ok((dot / (norm_a * norm_b)).clamp(0.0, 1.0))
+}
+
+/// Spectral entropy similarity (Li et al., Nature Methods 2021).
+///
+/// `sim = 1 - (2·H(A⊕B) - H(A) - H(B)) / ln(4)`
+///
+/// where H is Shannon entropy and A⊕B is the 1:1 mixture of the two spectra.
+/// Outperforms cosine for small-molecule identification; robust to missing peaks
+/// and intensity noise because it operates on the information content rather than
+/// raw magnitudes.
+fn spectral_entropy_sparse(a: &SparseVec, b: &SparseVec) -> Result<f32> {
+    // Convert L2-normalised intensities to a probability distribution.
+    // Dividing by the sum preserves relative proportions.
+    let to_prob = |sv: &SparseVec| -> Vec<(usize, f32)> {
+        let sum: f32 = sv.iter().map(|(_, i)| *i).sum();
+        if sum <= 0.0 { return Vec::new(); }
+        sv.iter().map(|&(bin, i)| (bin, (i / sum).max(0.0))).collect()
+    };
+
+    let shannon = |probs: &[(usize, f32)]| -> f32 {
+        probs.iter().map(|(_, p)| if *p > 1e-12 { -p * p.ln() } else { 0.0 }).sum()
+    };
+
+    let pa = to_prob(a);
+    let pb = to_prob(b);
+    if pa.is_empty() || pb.is_empty() { return Ok(0.0); }
+
+    let s_a = shannon(&pa);
+    let s_b = shannon(&pb);
+
+    // Build the 1:1 mixture spectrum via sorted two-pointer merge.
+    let mut merged: Vec<(usize, f32)> = Vec::with_capacity(pa.len() + pb.len());
+    let (mut ia, mut ib) = (0, 0);
+    while ia < pa.len() && ib < pb.len() {
+        match pa[ia].0.cmp(&pb[ib].0) {
+            std::cmp::Ordering::Less    => { merged.push((pa[ia].0, pa[ia].1 * 0.5)); ia += 1; }
+            std::cmp::Ordering::Greater => { merged.push((pb[ib].0, pb[ib].1 * 0.5)); ib += 1; }
+            std::cmp::Ordering::Equal   => {
+                merged.push((pa[ia].0, (pa[ia].1 + pb[ib].1) * 0.5));
+                ia += 1; ib += 1;
+            }
+        }
+    }
+    while ia < pa.len() { merged.push((pa[ia].0, pa[ia].1 * 0.5)); ia += 1; }
+    while ib < pb.len() { merged.push((pb[ib].0, pb[ib].1 * 0.5)); ib += 1; }
+
+    let s_ab = shannon(&merged);
+    let ln4 = (4.0_f32).ln();
+    Ok((1.0 - (2.0 * s_ab - s_a - s_b) / ln4).clamp(0.0, 1.0))
+}
+
+/// Hellinger similarity — the Bhattacharyya coefficient in probability space.
+///
+/// `sim = Σ sqrt(p_A,i × p_B,i)`  (ranges 0–1, 1 = identical).
+///
+/// Computed on the square-root-transformed probability distributions, which
+/// reduces the influence of dominant peaks and is more tolerant to noise than
+/// cosine.  Ranks highly for ESI-MS compound identification.
+fn hellinger_sparse(a: &SparseVec, b: &SparseVec) -> Result<f32> {
+    let sum_a: f32 = a.iter().map(|(_, i)| *i).sum();
+    let sum_b: f32 = b.iter().map(|(_, i)| *i).sum();
+    if sum_a <= 0.0 || sum_b <= 0.0 { return Ok(0.0); }
+
+    let mut bc = 0.0_f32;
+    let (mut ia, mut ib) = (0, 0);
+    while ia < a.len() && ib < b.len() {
+        match a[ia].0.cmp(&b[ib].0) {
+            std::cmp::Ordering::Less    => ia += 1,
+            std::cmp::Ordering::Greater => ib += 1,
+            std::cmp::Ordering::Equal   => {
+                let p_a = (a[ia].1 / sum_a).max(0.0);
+                let p_b = (b[ib].1 / sum_b).max(0.0);
+                bc += (p_a * p_b).sqrt();
+                ia += 1; ib += 1;
+            }
+        }
+    }
+    Ok(bc.clamp(0.0, 1.0))
+}
+
+/// Bray-Curtis similarity = 1 − Σ|u_i − v_i| / Σ(u_i + v_i).
+///
+/// Well-suited to compositional/abundance data.  Penalises differences
+/// proportionally to shared signal, making it less sensitive to large peaks
+/// than cosine and more tolerant to asymmetric intensity noise.
+fn bray_curtis_sparse(a: &SparseVec, b: &SparseVec) -> Result<f32> {
+    let mut sum_diff = 0.0_f32;
+    let mut sum_total = 0.0_f32;
+    let (mut ia, mut ib) = (0, 0);
+
+    while ia < a.len() && ib < b.len() {
+        match a[ia].0.cmp(&b[ib].0) {
+            std::cmp::Ordering::Less => {
+                sum_diff  += a[ia].1;
+                sum_total += a[ia].1;
+                ia += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                sum_diff  += b[ib].1;
+                sum_total += b[ib].1;
+                ib += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                sum_diff  += (a[ia].1 - b[ib].1).abs();
+                sum_total += a[ia].1 + b[ib].1;
+                ia += 1; ib += 1;
+            }
+        }
+    }
+    while ia < a.len() { sum_diff += a[ia].1; sum_total += a[ia].1; ia += 1; }
+    while ib < b.len() { sum_diff += b[ib].1; sum_total += b[ib].1; ib += 1; }
+
+    if sum_total <= 0.0 { return Ok(0.0); }
+    Ok((1.0 - sum_diff / sum_total).clamp(0.0, 1.0))
+}
+
 /// Computes the dot product of two vectors.
+#[allow(dead_code)]
 pub fn dot(v1: &[f32], v2: &[f32]) -> Result<f32> {
     if v1.len() != v2.len() {
         return Err(SpectrumProcessingError::MatrixDimensionMismatch(
@@ -326,6 +470,7 @@ fn sparse_dot(a: &SparseVec, b: &SparseVec) -> Result<f32> {
 }
 
 /// Normalizes a vector in-place.
+#[allow(dead_code)]
 fn normalize(v: &mut [f32]) -> Result<()> {
     if v.is_empty() {
         return Ok(());
@@ -356,6 +501,7 @@ fn normalize(v: &mut [f32]) -> Result<()> {
 }
 
 /// Computes a pairwise similarity matrix for spectra based on their binary bit vectors.
+#[allow(dead_code)]
 pub fn compute_pairwise_similarity_matrix_ndarray(
     bits_map: &HashMap<String, Vec<f32>>,
 ) -> Result<(Vec<String>, Array2<f32>)> {
@@ -455,21 +601,31 @@ pub fn compute_pairwise_similarity_matrix_sparse(
         ));
     }
     
-    if similarity_metric == "modified-cosine" && ms_level == 1 {
+    const VALID_METRICS: &[&str] = &[
+        "cosine", "weighted-cosine", "spectral-entropy", "hellinger", "bray-curtis",
+        "modified-cosine", "modified-weighted-cosine", "modified-spectral-entropy",
+        "modified-hellinger", "modified-bray-curtis",
+    ];
+    if !VALID_METRICS.contains(&similarity_metric.as_str()) {
+        return Err(SpectrumProcessingError::InvalidParameters(
+            format!("**Unknown similarity metric: {}. Valid options: {}**",
+                similarity_metric, VALID_METRICS.join(", "))
+        ));
+    }
+
+    const MS2_ONLY: &[&str] = &[
+        "modified-cosine", "modified-weighted-cosine", "modified-spectral-entropy",
+        "modified-hellinger", "modified-bray-curtis",
+    ];
+    if ms_level == 1 && MS2_ONLY.contains(&similarity_metric.as_str()) {
         return Err(SpectrumProcessingError::InvalidMsLevel(
-            "**The modified cosine similarity metric can only be used with MS2 data**".to_string()
+            format!("**{} can only be used with MS2 data**", similarity_metric)
         ));
     }
-    
-    if similarity_metric == "modified-cosine" && mass_tolerance <= 0.0 {
+
+    if similarity_metric.starts_with("modified-") && mass_tolerance <= 0.0 {
         return Err(SpectrumProcessingError::InvalidParameters(
-            "**mass_tolerance must be positive for modified-cosine metric**".to_string()
-        ));
-    }
-    
-    if similarity_metric != "cosine" && similarity_metric != "modified-cosine" {
-        return Err(SpectrumProcessingError::InvalidParameters(
-            format!("**Unknown similarity metric: {}. Must be 'cosine' or 'modified-cosine'**", similarity_metric)
+            "**mass_tolerance must be positive for modified metrics**".to_string()
         ));
     }
 
@@ -493,15 +649,18 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     // println!("||    Cached scan IDs in {:.2?}", start.elapsed());
 
     let start = Instant::now();
-    let scans_clone = scans.clone();
+    // Wrap shared data in Arc so each parallel task increments a pointer rather than
+    // cloning the full collection (previously caused O(n) full HashMap/Vec copies).
+    let scans_arc: Arc<Vec<String>> = Arc::new(scans.clone());
+    let metadata_arc: Arc<HashMap<String, SpectrumMetadata>> = Arc::new(spec_metadata.clone());
     let entries: std::result::Result<Vec<(usize, usize, f32)>, SpectrumProcessingError> = {
         let metric = similarity_metric.clone();
         (0..n)
             .into_par_iter()
             .flat_map(move |i| {
                 let spectra = Arc::clone(&spectra);
-                let scans = scans_clone.clone();
-                let spec_metadata = spec_metadata.clone();
+                let scans = Arc::clone(&scans_arc);
+                let metadata = Arc::clone(&metadata_arc);
                 let metric = metric.clone();
 
                 let a_id = scans[i].clone();
@@ -511,36 +670,28 @@ pub fn compute_pairwise_similarity_matrix_sparse(
                     let b_id = scans[j].clone();
                     let b = spectra[j];
 
-                    let sim_result = if metric == "modified-cosine" {
-                        let a_meta = spec_metadata.get(&a_id).ok_or_else(|| {
-                            SpectrumProcessingError::EmptyInput(
-                                format!("**Missing metadata for scan {}**", a_id)
-                            )
-                        })?;
-                        let b_meta = spec_metadata.get(&b_id).ok_or_else(|| {
-                            SpectrumProcessingError::EmptyInput(
-                                format!("**Missing metadata for scan {}**", b_id)
-                            )
-                        })?;
-                        
-                        let delta_mz = b_meta.target_mz - a_meta.target_mz;
-                        if !delta_mz.is_finite() {
-                            return Err(SpectrumProcessingError::NumericalError(
-                                format!("**Invalid target_mz values for scans {} and {}**", a_id, b_id)
-                            ));
-                        }
-                        
-                        let shift_bins = (delta_mz / mass_tolerance).round() as isize;
-
-                        let b_shifted = shift_sparse_vec(b, -shift_bins)?;
-                        let sim1 = cosine_similarity_sparse(a, &b_shifted)?;
-
-                        let a_shifted = shift_sparse_vec(a, shift_bins)?;
-                        let sim2 = cosine_similarity_sparse(&a_shifted, b)?;
-
-                        Ok(sim1.max(sim2))
-                    } else {
-                        cosine_similarity_sparse(a, b)
+                    let mt = mass_tolerance;
+                    let sim_result = match metric.as_str() {
+                        "weighted-cosine"  => weighted_cosine_sparse(a, b, mt),
+                        "spectral-entropy" => spectral_entropy_sparse(a, b),
+                        "hellinger"        => hellinger_sparse(a, b),
+                        "bray-curtis"      => bray_curtis_sparse(a, b),
+                        "modified-cosine" =>
+                            apply_modified_shift(a, b, &a_id, &b_id, &metadata, mt,
+                                cosine_similarity_sparse),
+                        "modified-weighted-cosine" =>
+                            apply_modified_shift(a, b, &a_id, &b_id, &metadata, mt,
+                                |x, y| weighted_cosine_sparse(x, y, mt)),
+                        "modified-spectral-entropy" =>
+                            apply_modified_shift(a, b, &a_id, &b_id, &metadata, mt,
+                                spectral_entropy_sparse),
+                        "modified-hellinger" =>
+                            apply_modified_shift(a, b, &a_id, &b_id, &metadata, mt,
+                                hellinger_sparse),
+                        "modified-bray-curtis" =>
+                            apply_modified_shift(a, b, &a_id, &b_id, &metadata, mt,
+                                bray_curtis_sparse),
+                        _ => cosine_similarity_sparse(a, b),
                     };
 
                     match sim_result {
@@ -566,6 +717,50 @@ pub fn compute_pairwise_similarity_matrix_sparse(
     println!("||    Filled matrix in {:.2?}", start.elapsed());
 
     Ok((scans, mat))
+}
+
+/// Applies the modified (precursor-mass-shifted) variant of any spectral similarity function.
+///
+/// The shift is computed from the precursor m/z difference between the two spectra:
+/// `shift_bins = round((target_mz_b − target_mz_a) / mass_tolerance)`.
+/// The similarity is evaluated both ways (shift b onto a, and a onto b) and the
+/// maximum is returned, matching the convention of modified-cosine.
+fn apply_modified_shift<F>(
+    a: &SparseVec,
+    b: &SparseVec,
+    a_id: &str,
+    b_id: &str,
+    metadata: &HashMap<String, SpectrumMetadata>,
+    mass_tolerance: f32,
+    sim_fn: F,
+) -> Result<f32>
+where
+    F: Fn(&SparseVec, &SparseVec) -> Result<f32>,
+{
+    let a_meta = metadata.get(a_id).ok_or_else(|| {
+        SpectrumProcessingError::EmptyInput(format!("**Missing metadata for scan {}**", a_id))
+    })?;
+    let b_meta = metadata.get(b_id).ok_or_else(|| {
+        SpectrumProcessingError::EmptyInput(format!("**Missing metadata for scan {}**", b_id))
+    })?;
+
+    let delta_mz = b_meta.target_mz - a_meta.target_mz;
+    if !delta_mz.is_finite() {
+        return Err(SpectrumProcessingError::NumericalError(
+            format!("**Invalid target_mz values for scans {} and {}**", a_id, b_id)
+        ));
+    }
+
+    let shift_bins = (delta_mz / mass_tolerance).round() as isize;
+    if shift_bins == 0 {
+        return sim_fn(a, b);
+    }
+
+    let b_shifted = shift_sparse_vec(b, -shift_bins)?;
+    let sim1 = sim_fn(a, &b_shifted)?;
+    let a_shifted = shift_sparse_vec(a, shift_bins)?;
+    let sim2 = sim_fn(&a_shifted, b)?;
+    Ok(sim1.max(sim2))
 }
 
 /// Shifts a sparse vector by a given number of bins, filtering out negative indices.
@@ -613,23 +808,23 @@ pub fn compute_sparse_vec_map(
         ));
     }
 
-    let mut map = HashMap::with_capacity(spec_map.len());
-    for (scan, peaks) in spec_map {
-        match spectrum_to_sparse_vec(peaks, bin_width, max_mz, minimum_intensity) {
-            Ok(sv) => {
-                map.insert(scan.clone(), sv);
-            }
-            Err(e) => {
-                return Err(SpectrumProcessingError::InvalidParameters(
+    let pairs: Vec<(&String, &Vec<Peak>)> = spec_map.iter().collect();
+    let entries: Result<Vec<(String, SparseVec)>> = pairs
+        .into_par_iter()
+        .map(|(scan, peaks)| {
+            spectrum_to_sparse_vec(peaks, bin_width, max_mz, minimum_intensity)
+                .map(|sv| (scan.clone(), sv))
+                .map_err(|e| SpectrumProcessingError::InvalidParameters(
                     format!("**Error processing scan {}: {}**", scan, e)
-                ));
-            }
-        }
-    }
-    Ok(map)
+                ))
+        })
+        .collect();
+
+    Ok(entries?.into_iter().collect())
 }
 
 /// Compute a map from scan IDs to binary bit vector representations of their peaks.
+#[allow(dead_code)]
 pub fn compute_dense_vec_map(
     spec_map: &HashMap<String, Vec<Peak>>,
     bin_width: f32,
@@ -647,99 +842,6 @@ pub fn compute_dense_vec_map(
         bits_map.insert(scan.clone(), bv);
     }
     Ok(bits_map)
-}
-
-/// Remove any vector positions (bins) that are zero across all spectra.
-pub fn prune_unused_bins(
-    bits_map: &HashMap<String, Vec<f32>>,
-) -> Result<HashMap<String, Vec<f32>>> {
-    if bits_map.is_empty() {
-        return Ok(HashMap::new());
-    }
-    
-    let first_len = bits_map.values().next().unwrap().len();
-    // Validate all vectors have the same length
-    for (scan_id, vec) in bits_map {
-        if vec.len() != first_len {
-            return Err(SpectrumProcessingError::MatrixDimensionMismatch(
-                format!("**Vector for scan {} has length {} but expected {}**", scan_id, vec.len(), first_len)
-            ));
-        }
-    }
-    
-    let n = first_len;
-    // Determine which indices are used by any vector
-    let mut used = vec![false; n];
-    for vec in bits_map.values() {
-        for (i, &val) in vec.iter().enumerate() {
-            if val != 0.0 {
-                used[i] = true;
-            }
-        }
-    }
-    
-    // Collect active positions
-    let active_indices: Vec<usize> = used.iter()
-        .enumerate()
-        .filter_map(|(i, &u)| if u { Some(i) } else { None })
-        .collect();
-
-    // Build pruned map
-    let mut pruned = HashMap::with_capacity(bits_map.len());
-    for (scan, vec) in bits_map {
-        let pruned_vec: Vec<f32> = active_indices
-            .iter()
-            .map(|&i| vec[i])
-            .collect();
-        pruned.insert(scan.clone(), pruned_vec);
-    }
-    Ok(pruned)
-}
-
-/// Set columns to zero if they have a hit in at least `min_frac * n_spec` spectra.
-pub fn prune_background_columns(
-    bits_map: &mut HashMap<String, Vec<f32>>,
-    min_frac: f64
-) -> Result<()> {
-    if min_frac < 0.0 || min_frac > 1.0 {
-        return Err(SpectrumProcessingError::InvalidParameters(
-            "**min_frac must be between 0.0 and 1.0**".to_string()
-        ));
-    }
-    
-    let n_spec = bits_map.len();
-    if n_spec == 0 { 
-        return Ok(());
-    }
-
-    // assume all vectors have the same length
-    let len = bits_map.values().next().unwrap().len();
-    let threshold = (n_spec as f64 * min_frac).ceil() as usize;
-
-    // 1) Count spectra with a "hit" in each column
-    let mut counts = vec![0usize; len];
-    for vec in bits_map.values() {
-        for (j, &v) in vec.iter().enumerate() {
-            if v != 0.0 {
-                counts[j] += 1;
-            }
-        }
-    }
-
-    // 2) Mark background columns
-    let bg_cols: Vec<usize> = counts.iter()
-        .enumerate()
-        .filter_map(|(j, &c)| if c >= threshold { Some(j) } else { None })
-        .collect();
-
-    // 3) Zero out background columns
-    for vec in bits_map.values_mut() {
-        for &j in &bg_cols {
-            vec[j] = 0.0;
-        }
-    }
-    
-    Ok(())
 }
 
 /// Remove bins from sparse vectors if they appear in at least `min_frac * n_spec` spectra.

@@ -28,6 +28,7 @@ pub struct Peak {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct SpectrumMetadata {
     pub index: String,
     pub id: String,
@@ -269,6 +270,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
 /// A new `HashMap` where each key-value pair is a filtered version of the
 /// input map. Only scans with the specified MS level are included in the
 /// output.
+#[allow(dead_code)]
 pub fn filter_by_ms_level(
     map: HashMap<String, Vec<Peak>>, 
     map_metadata: HashMap<String, SpectrumMetadata>, 
