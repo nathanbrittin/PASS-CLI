@@ -33,9 +33,15 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y libfontconfig1-dev libfreetype6-dev pkg-config
+          sudo apt-get install -y \
+            libfontconfig1-dev libfreetype6-dev \
+            pkg-config zlib1g-dev libssl-dev
       - name: Build
+        env:
+          RUST_BACKTRACE: 1
         run: cargo build --release
+      - name: Verify binary exists
+        run: ls -lh target/release/pass-cli
       - uses: actions/upload-artifact@v4
         with:
           name: pass-cli-linux-x64
