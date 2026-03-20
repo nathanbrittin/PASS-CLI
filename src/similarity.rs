@@ -1039,7 +1039,7 @@ mod tests {
     fn test_bitvec_and_cosine() -> Result<()> {
         // Load sample data
         println!("||    Importing test mzML file...");
-        let (map, _) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")
+        let (map, _) = import_mzml("tests/data/FeatureFinderCentroided_1_input.mzML")
                     .map_err(|e| SpectrumProcessingError::ParseError(format!("import_mzml failed: {:?}", e)))?;
         println!("||    Number of Spectra in test file: {}", map.len());
         
@@ -1296,7 +1296,7 @@ mod tests {
         
         // Load sample data
         println!("||    Importing test mzML file...");
-        let (spec_map, metadata_map) = import_mzml("tests\\data\\FeatureFinderCentroided_1_input.mzML")
+        let (spec_map, metadata_map) = import_mzml("tests/data/FeatureFinderCentroided_1_input.mzML")
             .map_err(|e| SpectrumProcessingError::ParseError(format!("import_mzml failed: {:?}", e)))?;
         println!("||    Number of Spectra in test file: {}", spec_map.len());
         
