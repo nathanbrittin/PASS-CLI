@@ -90,6 +90,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed to read annotated tag messages
+
+      - name: Extract tag annotation (release notes)
+        id: tag_notes
+        run: |
+          NOTES=$(git tag -l --format='%(contents)' "${{ github.ref_name }}")
+          {
+            echo "body<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with: { name: pass-cli-windows,    path: artifacts/windows }
@@ -128,4 +140,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: releases/*
-          generate_release_notes: true
+          body: ${{ steps.tag_notes.outputs.body }}
+          generate_release_notes: true   # appended after your tag message
