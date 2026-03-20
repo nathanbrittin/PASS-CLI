@@ -14,7 +14,6 @@ use flate2::read::ZlibDecoder;
 use csv::WriterBuilder;
 use ndarray::{Array2, Axis};
 
-
 // -----------------
 // This section contains data structures:
 // - Peak: A struct representing a single m/z-intensity pair. This is used to store the mz and int data.
@@ -40,9 +39,9 @@ pub struct SpectrumMetadata {
     pub scan_window_upper_limit: f32,
     pub target_mz: f32,
     pub selected_ion: f32,
-    pub charge: u8
+    pub charge: u8,
+    pub retention_time_seconds: f32,
 }
-
 
 // -------------
 // This section contains the functions that are necessary for importing mzML files and parsing their contents.
@@ -85,6 +84,7 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
         let mut target_mz = 0.0;
         let mut selected_ion = 0.0;
         let mut charge = 0;
+        let mut retention_time_seconds: f32 = 0.0;
 
         // Get metadata from cvParams with better error handling
         let mut ms_level = 1;
@@ -144,6 +144,17 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
                         None => errors.push(format!("**Spectrum {}: Invalid charge value**", scan)),
                     }
                 },
+                Some("MS:1000016") => { // scan start time
+                    if let Some(val_str) = cv.attribute("value") {
+                        if let Ok(mut val) = val_str.parse::<f32>() {
+                            // If units are minutes, convert to seconds
+                            if matches!(cv.attribute("unitAccession"), Some("UO:0000031")) {
+                                val *= 60.0;
+                            }
+                            retention_time_seconds = val;
+                        }
+                    }
+                }
                 _ => (),
             }
         }
@@ -159,7 +170,8 @@ pub fn import_mzml(file_path: &str) -> Result<(HashMap<String, Vec<Peak>>, HashM
             scan_window_upper_limit,
             target_mz,
             selected_ion,
-            charge
+            charge,
+            retention_time_seconds,
         };
 
         result_metadata.insert(scan.clone(), spec_metadata);
@@ -389,12 +401,6 @@ fn decode_int_array(base64_seq: &str, is_64bit: bool, is_zlib: bool) -> Result<V
     
     Ok(floats)
 }
-
-// -----------------
-// This section defined the function used for processing the mass spectrometry data.
-// 
-// -----------------
-
 
 
 // -----------------

@@ -33,6 +33,9 @@ pub use similarity::{
 mod visual;
 use visual::{plot_similarity_heatmap, ImageFormat, ColorTheme, ThemeName, ChromatogramType};
 
+mod processing;
+use processing::{ProcessingConfig, NormMethod};
+
 // Custom error types for better error handling
 #[derive(Debug)]
 enum CliError {
@@ -204,16 +207,52 @@ fn process_spectral_data(
     if spec_map.is_empty() {
         return Err(CliError::ProcessingError("No spectra found in the input file".to_string()));
     }
-    
     println!("||    Parsed {} spectra successfully.", spec_map.len());
-
-    // Future: Improved data processing and filtering.
 
     // Filter to only MS1 and MS2
     let ms1_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 1);
     let ms2_spec_map = filter_by_ms_level(spec_map.clone(), spec_metadata.clone(), 2);
     println!("||    Num. MS1 spectra: {}, Num. MS2 spectra: {}", ms1_spec_map.len(), ms2_spec_map.len());
 
+    // ------------------ Processing: noise → (optional) background → normalization ------------------
+    let max_ms1_mz = ms1_spec_map.values()
+        .map(|p| p.iter().map(|p| p.mz).fold(0., f32::max))
+        .fold(0., f32::max);
+
+    // Choose sensible defaults (can move to CLI/config later)
+    let proc_cfg = ProcessingConfig {
+        bin_width: mass_tolerance,               // reuse your CLI param
+        max_mz: max_ms1_mz.max(1.0),             // guard
+        minimum_intensity: ms1_minimum_intensity,
+        snr_min: 5.0,                            // MAD-based S/N ≥ 5
+        norm: NormMethod::PQN,                   // robust global scaling
+        blank_ratio_max: 0.20,
+        sample_over_blank_min: 3.0,
+    };
+
+    // If you have blank scans, list their scan IDs here; otherwise pass None.
+    let blank_scan_ids: Option<Vec<String>> = None; // or Some(vec!["scan=1".into(), "scan=5".into(), ...]);
+
+    let proc_result = processing::preprocess_after_import(
+        &ms1_spec_map,
+        &spec_metadata,
+        &proc_cfg,
+        blank_scan_ids.as_ref().map(|v| v.as_slice())
+    );
+
+    // Replace MS1 with cleaned & normalized MS1
+    let ms1_spec_map = proc_result.cleaned_ms1;
+
+    // Apply the *same* normalization factors to MS2 so MS1/MS2 stay on a consistent scale per scan.
+    let ms2_spec_map = processing::apply_scale_factors(ms2_spec_map, &proc_result.scale_factors);
+
+    // Quick log
+    println!("||    Processing summary:");
+    println!("||        - scans: {}", proc_result.stats.n_scans);
+    println!("||        - noise-removed peaks: {}", proc_result.stats.n_removed_peaks_noise);
+    println!("||        - background bins: {}", proc_result.stats.n_background_bins);
+    println!("||        - norm method: {:?}, median factor: {:.3}", proc_result.stats.norm_method, proc_result.stats.norm_factors_median);
+    println!("------------------------------------------------------------------------------");
 
     // Determine a max_mz for binning (e.g., highest m/z across all spectra)
     let max_ms1_mz = ms1_spec_map.values()

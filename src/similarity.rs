@@ -1015,6 +1015,7 @@ mod tests {
             target_mz: 500.0,
             selected_ion: 500.0,
             charge: 2,
+            retention_time_seconds: 1.0
         });
         
         spec_metadata.insert("2".to_string(), SpectrumMetadata {
@@ -1029,6 +1030,7 @@ mod tests {
             target_mz: 510.0, // 10 Da higher
             selected_ion: 510.0,
             charge: 2,
+            retention_time_seconds: 2.0
         });
         
         spec_metadata.insert("3".to_string(), SpectrumMetadata {
@@ -1043,6 +1045,7 @@ mod tests {
             target_mz: 500.0, // same as spectrum 1
             selected_ion: 500.0,
             charge: 2,
+            retention_time_seconds: 2.0
         });
         
         // Compute similarity matrices using both methods
@@ -1133,6 +1136,7 @@ mod tests {
             target_mz: 500.0,
             selected_ion: 500.0,
             charge: 2,
+            retention_time_seconds: 1.0,
         });
         
         spec_metadata.insert("2".to_string(), SpectrumMetadata {
@@ -1147,6 +1151,7 @@ mod tests {
             target_mz: 500.1, // only 0.1 Da difference
             selected_ion: 500.1,
             charge: 2,
+            retention_time_seconds: 1.0,
         });
         
         let mass_tolerance = 1.0; // 1 Da bins
