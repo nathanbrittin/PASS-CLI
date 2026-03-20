@@ -1,0 +1,131 @@
+name: Release
+
+# Triggered by pushing a version tag (e.g. git tag v1.3.0 && git push --tags)
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # needed to create GitHub Releases
+
+jobs:
+  # ── Windows ──────────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install MinGW linker
+        run: sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-gnu
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pass-cli-windows
+          path: target/x86_64-pc-windows-gnu/release/pass-cli.exe
+
+  # ── Linux ─────────────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux (x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pass-cli-linux-x64
+          path: target/release/pass-cli
+
+  # ── macOS Intel ───────────────────────────────────────────────────────────
+  build-macos-intel:
+    name: macOS Intel (x86_64)
+    runs-on: macos-13          # last GitHub-hosted Intel Mac runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pass-cli-macos-x64
+          path: target/release/pass-cli
+
+  # ── macOS Apple Silicon ───────────────────────────────────────────────────
+  build-macos-arm64:
+    name: macOS Apple Silicon (aarch64)
+    runs-on: macos-latest      # Apple Silicon runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pass-cli-macos-arm64
+          path: target/release/pass-cli
+
+  # ── Package & publish release ─────────────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux, build-macos-intel, build-macos-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with: { name: pass-cli-windows,    path: artifacts/windows }
+      - uses: actions/download-artifact@v4
+        with: { name: pass-cli-linux-x64,  path: artifacts/linux }
+      - uses: actions/download-artifact@v4
+        with: { name: pass-cli-macos-x64,  path: artifacts/macos-x64 }
+      - uses: actions/download-artifact@v4
+        with: { name: pass-cli-macos-arm64, path: artifacts/macos-arm64 }
+
+      - name: Package archives
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p releases
+
+          # Windows ZIP
+          cp artifacts/windows/pass-cli.exe pass-cli.exe
+          zip "releases/pass-cli-${VERSION}-windows-x64.zip" pass-cli.exe README.md 2>/dev/null || \
+          zip "releases/pass-cli-${VERSION}-windows-x64.zip" pass-cli.exe
+
+          # Linux tar.gz
+          cp artifacts/linux/pass-cli pass-cli && chmod +x pass-cli
+          tar -czf "releases/pass-cli-${VERSION}-linux-x64.tar.gz" pass-cli
+
+          # macOS Intel tar.gz
+          cp artifacts/macos-x64/pass-cli pass-cli && chmod +x pass-cli
+          tar -czf "releases/pass-cli-${VERSION}-macos-x64.tar.gz" pass-cli
+
+          # macOS Apple Silicon tar.gz
+          cp artifacts/macos-arm64/pass-cli pass-cli && chmod +x pass-cli
+          tar -czf "releases/pass-cli-${VERSION}-macos-arm64.tar.gz" pass-cli
+
+          ls -lh releases/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: releases/*
+          generate_release_notes: true
